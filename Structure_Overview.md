@@ -2,7 +2,7 @@
 
 > **Fastango** — *Bring Django’s structure to FastAPI, without slowing it down.*
 >
-> Fastango is a Django-inspired modular application framework built on top of FastAPI. It allows you to build large, scalable FastAPI projects using pluggable mini-apps (similar to Django apps) with optional DRM (Digital Rights Management / permissions), access control, and a security-first design.
+> Fastango is a Django-inspired modular project boilerplate built on top of FastAPI. It allows you to build large, scalable FastAPI projects using pluggable mini-apps (similar to Django apps) with optional DRM (Digital Rights Management / permissions), access control, and a security-first design.
 
 This document serves as the foundational spec and production-ready blueprint for **Fastango**. It derives structural rules from a large Django/DRF project (`core-backend`) and translates them into pluggable, highly performant FastAPI mini-apps.
 

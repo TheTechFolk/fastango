@@ -213,7 +213,7 @@ docker-compose exec api alembic downgrade -1
 
 ## 🧪 Testing Guidelines
 
-Fastango includes an integration and unit testing framework built around `pytest` and `httpx.AsyncClient`. It runs against an **in-memory SQLite** test database via `aiosqlite` for isolated, ultra-fast validation.
+Fastango includes an integration and unit testing setup built around `pytest` and `httpx.AsyncClient`. It runs against an **in-memory SQLite** test database via `aiosqlite` for isolated, ultra-fast validation.
 
 ### Run the Test Suite
 Ensure the virtual environment is active and run:

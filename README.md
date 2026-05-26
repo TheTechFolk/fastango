@@ -1,8 +1,30 @@
 # Fastango 🚀
 
-> **Fastango** — *Bring Django's structure to FastAPI, without slowing it down.*
+Fastango is a Django-inspired modular project boilerplate built on top of FastAPI. It lets you build large, scalable FastAPI projects using pluggable mini-apps, similar to Django apps, with optional DRM, access control, and security-first design.
 
- A production-ready FastAPI boilerplate that mirrors Django's clean, modular, domain-driven architecture with native async performance.
+⚡ FastAPI speed · 🧩 Django-like apps · 🔐 Built-in security mindset
+
+---
+
+## 🚀 Why Fastango?
+FastAPI is fast and modern, but as projects grow, managing routes, services, permissions, and business logic can become messy. Django solves this with its app-based architecture — Fastango brings that idea to FastAPI, without sacrificing performance or flexibility.
+
+Fastango is designed for:
+* Large FastAPI backends
+* Multi-tenant systems
+* DRM / protected APIs
+* Research & production-ready systems
+* Teams who love Django’s structure but need FastAPI’s speed
+
+---
+
+## ✨ Key Features
+* 🧩 **Django-like Mini Apps**: Each feature lives in its own self-contained app.
+* 🔌 **Pluggable Architecture**: Enable/disable apps dynamically.
+* 🔐 **DRM & Access Control Ready**: Built-in hooks for license checks, permissions, and policies.
+* ⚡ **FastAPI Native**: Fully compatible with FastAPI dependencies, routers, and async.
+* 🏗️ **Clean Project Structure**: Opinionated but flexible layout for long-term maintainability.
+* 🧪 **Test-Friendly**: Easy unit and integration testing per app.
 
 ---
 
@@ -11,11 +33,11 @@
 ```
 fastango_v1/
 ├── app/
-│   ├── main.py              # Application factory
+│   ├── main.py              # Application factory (with global request ContextVar hooks)
 │   ├── config.py            # Pydantic BaseSettings (loads local.env)
-│   ├── database.py          # Async SQLAlchemy engine + session dependency
+│   ├── database.py          # Async SQLAlchemy engine + request-scoped session ContextVar helper
 │   ├── exceptions.py        # Centralized exception handlers registration
-│   ├── middleware.py        # Centralized middleware configurator
+│   ├── middleware.py        # Centralized middleware configurator (CORS & TrustedHost)
 │   └── core/
 │       ├── registry.py      # Module auto-discovery (router + model registration)
 │       ├── security.py      # JWT + bcrypt
@@ -38,6 +60,8 @@ fastango_v1/
 └── local.env
 ```
 
+---
+
 ## 🚀 Quick Start
 
 ### 1. Install dependencies
@@ -50,19 +74,25 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-### 2. Start the database
+### 2. Install pre-commit hooks
+
+```bash
+pre-commit install
+```
+
+### 3. Start the database
 
 ```bash
 docker-compose up postgres redis -d
 ```
 
-### 3. Run migrations
+### 4. Run migrations
 
 ```bash
 alembic upgrade head
 ```
 
-### 4. Run the server
+### 5. Run the server
 
 ```bash
 uvicorn app.main:app --reload
@@ -111,15 +141,14 @@ Modules are auto-discovered by [app/core/registry.py](app/core/registry.py): dro
 ## 🔐 API Endpoints
 
 ### 🔑 Authentication
-- `POST /api/v1/auth/register` — Register a new admin account
-- `POST /api/v1/auth/login` — Authenticate credentials and get JWT token pair
+* `POST /api/v1/auth/register` — Register a new admin account
+* `POST /api/v1/auth/login` — Authenticate credentials and get JWT token pair
 
 ### 🏠 Home
-- `GET  /api/v1/home` — Simple landing welcome data
+* `GET  /api/v1/home` — Simple landing welcome data
 
 ### 👤 Profile
-- `GET  /api/v1/profile` — Fetch active authenticated user profile details
+* `GET  /api/v1/profile` — Fetch active authenticated user profile details
 
 ### 🏥 Health
-- `GET  /health` — Returns application status and health checks
-# fastango
+* `GET  /health` — Returns application status and health checks

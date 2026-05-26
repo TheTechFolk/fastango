@@ -43,7 +43,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title=settings.APP_NAME,
     version=settings.APP_VERSION,
-    description="Fastango — A Django-inspired modular FastAPI framework.",
+    description="Fastango — A Django-inspired modular FastAPI boilerplate.",
     docs_url="/docs",
     redoc_url="/redoc",
     openapi_url="/openapi.json",
