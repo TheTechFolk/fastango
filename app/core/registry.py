@@ -10,10 +10,11 @@ A module opts in to routing by creating apps.py with a ModuleConfig subclass.
 A module without apps.py (e.g. `common`) is skipped — its models.py is still
 imported so SQLAlchemy metadata stays complete for Alembic.
 """
+
 import importlib
 import logging
 import pkgutil
-from typing import Iterator
+from collections.abc import Iterator
 
 from fastapi import APIRouter, FastAPI
 
@@ -73,11 +74,7 @@ def _find_config_class(module) -> type[ModuleConfig] | None:
     """Find the first ModuleConfig subclass defined in `module`."""
     for attr_name in dir(module):
         obj = getattr(module, attr_name)
-        if (
-            isinstance(obj, type)
-            and issubclass(obj, ModuleConfig)
-            and obj is not ModuleConfig
-        ):
+        if isinstance(obj, type) and issubclass(obj, ModuleConfig) and obj is not ModuleConfig:
             return obj
     return None
 
@@ -106,9 +103,7 @@ def discover_modules(app: FastAPI, prefix: str = "/api/v1") -> list[ModuleConfig
 
         config_cls = _find_config_class(apps_mod)
         if config_cls is None:
-            logger.warning(
-                "app.modules.%s.apps has no ModuleConfig subclass — skipping", name
-            )
+            logger.warning("app.modules.%s.apps has no ModuleConfig subclass — skipping", name)
             continue
 
         config = config_cls()
@@ -118,9 +113,7 @@ def discover_modules(app: FastAPI, prefix: str = "/api/v1") -> list[ModuleConfig
                 prefix=config.prefix,
                 tags=list(config.tags),
             )
-            logger.info(
-                "Mounted module '%s' at %s%s", config.name, prefix, config.prefix
-            )
+            logger.info("Mounted module '%s' at %s%s", config.name, prefix, config.prefix)
         configs.append(config)
 
     app.include_router(api_router)

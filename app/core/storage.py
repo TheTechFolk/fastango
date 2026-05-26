@@ -1,6 +1,6 @@
 # app/core/storage.py
 import logging
-from typing import Optional, BinaryIO
+from typing import BinaryIO
 
 from app.config import settings
 
@@ -90,7 +90,7 @@ class S3StorageService:
         self,
         object_key: str,
         expiry_seconds: int = 3600,
-    ) -> Optional[str]:
+    ) -> str | None:
         """
         Generate a time-limited pre-signed URL for accessing a private S3 object.
 

@@ -3,6 +3,7 @@
 Shared pytest fixtures for the Fastango test suite.
 Uses an in-memory SQLite database (via aiosqlite) for fast, isolated tests.
 """
+
 # IMPORTANT: env vars are set BEFORE any app import so pydantic-settings picks
 # them up. APP_ENV=test enables the dev-only auth fallback; RATE_LIMIT_ENABLED
 # turns slowapi into a no-op so per-IP limits don't trip across test runs.
@@ -12,7 +13,7 @@ os.environ.setdefault("APP_ENV", "test")
 os.environ.setdefault("RATE_LIMIT_ENABLED", "false")
 
 import asyncio
-from typing import AsyncGenerator
+from collections.abc import AsyncGenerator
 
 import pytest
 import pytest_asyncio
@@ -71,6 +72,7 @@ async def client(db_session: AsyncSession) -> AsyncGenerator[AsyncClient, None]:
     Yield a test HTTP client with the database dependency overridden
     to use the isolated test session.
     """
+
     async def override_get_db():
         yield db_session
 

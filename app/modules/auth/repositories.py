@@ -1,6 +1,5 @@
 # app/modules/auth/repositories.py
 import uuid
-from typing import Optional
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -16,19 +15,15 @@ class AdminAuthRepository:
     """
 
     @staticmethod
-    async def get_by_email(db: AsyncSession, email: str) -> Optional[AdminAuth]:
+    async def get_by_email(db: AsyncSession, email: str) -> AdminAuth | None:
         """Fetch an admin auth record by email address."""
         result = await db.execute(select(AdminAuth).where(AdminAuth.email == email))
         return result.scalars().first()
 
     @staticmethod
-    async def get_by_admin_code(
-        db: AsyncSession, admin_code: uuid.UUID
-    ) -> Optional[AdminAuth]:
+    async def get_by_admin_code(db: AsyncSession, admin_code: uuid.UUID) -> AdminAuth | None:
         """Fetch an admin auth record by admin_code UUID."""
-        result = await db.execute(
-            select(AdminAuth).where(AdminAuth.admin_code == admin_code)
-        )
+        result = await db.execute(select(AdminAuth).where(AdminAuth.admin_code == admin_code))
         return result.scalars().first()
 
     @staticmethod

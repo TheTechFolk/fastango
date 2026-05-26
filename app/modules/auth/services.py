@@ -1,5 +1,4 @@
 # app/modules/auth/services.py
-from typing import Optional, Tuple
 
 from app.core.security import (
     create_access_token,
@@ -23,9 +22,7 @@ from app.modules.auth.schemas import AdminLoginSchema, AdminRegisterSchema
 class AdminAuthService:
     """Business logic for admin authentication flows."""
 
-    async def register(
-        self, data: AdminRegisterSchema
-    ) -> Tuple[Optional[dict], str]:
+    async def register(self, data: AdminRegisterSchema) -> tuple[dict | None, str]:
         """
         Register a new admin account.
 
@@ -46,9 +43,7 @@ class AdminAuthService:
 
         return self._build_tokens(admin), ADMIN_REGISTER_SUCCESS_MSG
 
-    async def login(
-        self, data: AdminLoginSchema
-    ) -> Tuple[Optional[dict], str]:
+    async def login(self, data: AdminLoginSchema) -> tuple[dict | None, str]:
         """
         Authenticate an admin user.
 
@@ -69,9 +64,7 @@ class AdminAuthService:
     def _build_tokens(self, admin: AdminAuth) -> dict:
         """Generate an access + refresh token pair for the given admin record."""
         return {
-            "access_token": create_access_token(
-                subject=admin.admin_code, role="admin"
-            ),
+            "access_token": create_access_token(subject=admin.admin_code, role="admin"),
             "refresh_token": create_refresh_token(subject=admin.admin_code),
             "token_type": "bearer",
         }

@@ -1,5 +1,5 @@
 # app/core/responses.py
-from typing import Any, Generic, Optional, TypeVar
+from typing import Any, Generic, TypeVar
 
 from pydantic import BaseModel
 
@@ -11,7 +11,7 @@ class APIResponse(BaseModel, Generic[T]):
 
     error: bool = False
     message: str = "Request executed successfully"
-    data: Optional[T] = None
+    data: T | None = None
 
 
 def success_response(

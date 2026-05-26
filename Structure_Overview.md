@@ -1,7 +1,7 @@
 # Fastango Architecture Blueprint: Bringing Django's Modular Structure to FastAPI
 
 > **Fastango** — *Bring Django’s structure to FastAPI, without slowing it down.*
-> 
+>
 > Fastango is a Django-inspired modular application framework built on top of FastAPI. It allows you to build large, scalable FastAPI projects using pluggable mini-apps (similar to Django apps) with optional DRM (Digital Rights Management / permissions), access control, and a security-first design.
 
 This document serves as the foundational spec and production-ready blueprint for **Fastango**. It derives structural rules from a large Django/DRF project (`core-backend`) and translates them into pluggable, highly performant FastAPI mini-apps.
@@ -51,7 +51,7 @@ Every sub-domain leaf (e.g., `core/apps/customer/profile`) is organized into the
 
 ## 2. FastAPI Architecture Translation Map
 
-When porting this architecture to **FastAPI**, we gain a massive boost in performance (via native asynchronous execution) and cleaner code since FastAPI is **Pydantic-first** natively. 
+When porting this architecture to **FastAPI**, we gain a massive boost in performance (via native asynchronous execution) and cleaner code since FastAPI is **Pydantic-first** natively.
 
 Here is how the Django concepts map to FastAPI components:
 
@@ -220,22 +220,22 @@ from app.database import Base
 
 class TimeStampedBase(Base):
     __abstract__ = True
-    
+
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), 
-        default=func.now(), 
+        DateTime(timezone=True),
+        default=func.now(),
         server_default=func.now()
     )
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), 
-        default=func.now(), 
-        onupdate=func.now(), 
+        DateTime(timezone=True),
+        default=func.now(),
+        onupdate=func.now(),
         server_default=func.now()
     )
 
 class CommonFieldBase(TimeStampedBase):
     __abstract__ = True
-    
+
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true")
 ```
 
@@ -252,11 +252,11 @@ from app.modules.common.models import CommonFieldBase
 
 class CustomerProfile(CommonFieldBase):
     __tablename__ = "customer_profile"
-    
+
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
     customer_code: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), 
-        nullable=False, 
+        UUID(as_uuid=True),
+        nullable=False,
         index=True
     )
     first_name: Mapped[str] = mapped_column(String(100), nullable=False)
@@ -388,7 +388,7 @@ class CustomerProfileService:
             )
             self.db.add(profile)
             await self.db.flush() # Flush to populate ID but keep transaction active
-            
+
         await self.db.refresh(profile) # Fetch fresh from DB after commit hook
         return self._to_dict(profile), PROFILE_CREATED_MSG
 
@@ -397,14 +397,14 @@ class CustomerProfileService:
             profile = await CustomerProfileRepository.get_by_customer_code(self.db, self.customer_code)
             if not profile:
                 return None, PROFILE_NOT_FOUND_MSG
-            
+
             update_data = data.model_dump(exclude_unset=True)
             if "age" in update_data:
                 profile.estimated_dob = AgeDateService.age_to_estimated_dob(update_data.pop("age"))
-            
+
             for key, val in update_data.items():
                 setattr(profile, key, val)
-                
+
         await self.db.refresh(profile)
         return self._to_dict(profile), PROFILE_UPDATED_MSG
 
@@ -510,16 +510,16 @@ app.add_middleware(
 @app.middleware("http")
 async def audit_and_time_middleware(request: Request, call_next):
     start_time = time.time()
-    
+
     # Process request
     response = await call_next(request)
-    
+
     process_time = time.time() - start_time
     response.headers["X-Process-Time"] = str(process_time)
-    
+
     # Extract endpoint, payload metadata and execute async Audit logging hook
     # await AuditLogService.log_request(request, response, process_time)
-    
+
     return response
 
 # Standardize global generic exceptions

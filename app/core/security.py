@@ -1,7 +1,6 @@
 # app/core/security.py
 import uuid
-from datetime import datetime, timedelta, timezone
-from typing import Optional
+from datetime import UTC, datetime, timedelta
 
 import bcrypt
 import jwt
@@ -25,17 +24,13 @@ def hash_password(plain_password: str) -> str:
     Note: bcrypt silently truncates inputs longer than 72 bytes. Enforce a
     length cap at the schema layer or pre-hash if you need longer passwords.
     """
-    return bcrypt.hashpw(
-        plain_password.encode("utf-8"), bcrypt.gensalt()
-    ).decode("utf-8")
+    return bcrypt.hashpw(plain_password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     """Verify a plain-text password against its bcrypt hash."""
     try:
-        return bcrypt.checkpw(
-            plain_password.encode("utf-8"), hashed_password.encode("utf-8")
-        )
+        return bcrypt.checkpw(plain_password.encode("utf-8"), hashed_password.encode("utf-8"))
     except ValueError:
         # Malformed hash → treat as failed verification, never raise.
         return False
@@ -45,18 +40,17 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
 def create_access_token(
     subject: str | uuid.UUID,
     role: str = "customer",
-    expires_delta: Optional[timedelta] = None,
+    expires_delta: timedelta | None = None,
 ) -> str:
     """Generate a short-lived signed JWT access token."""
-    expire = datetime.now(timezone.utc) + (
-        expires_delta
-        or timedelta(minutes=settings.JWT_ACCESS_TOKEN_EXPIRE_MINUTES)
+    expire = datetime.now(UTC) + (
+        expires_delta or timedelta(minutes=settings.JWT_ACCESS_TOKEN_EXPIRE_MINUTES)
     )
     payload = {
         "sub": str(subject),
         "role": role,
         "exp": expire,
-        "iat": datetime.now(timezone.utc),
+        "iat": datetime.now(UTC),
         "type": "access",
     }
     return jwt.encode(payload, settings.SECRET_KEY, algorithm=settings.JWT_ALGORITHM)
@@ -64,13 +58,11 @@ def create_access_token(
 
 def create_refresh_token(subject: str | uuid.UUID) -> str:
     """Generate a long-lived signed JWT refresh token."""
-    expire = datetime.now(timezone.utc) + timedelta(
-        days=settings.JWT_REFRESH_TOKEN_EXPIRE_DAYS
-    )
+    expire = datetime.now(UTC) + timedelta(days=settings.JWT_REFRESH_TOKEN_EXPIRE_DAYS)
     payload = {
         "sub": str(subject),
         "exp": expire,
-        "iat": datetime.now(timezone.utc),
+        "iat": datetime.now(UTC),
         "type": "refresh",
     }
     return jwt.encode(payload, settings.SECRET_KEY, algorithm=settings.JWT_ALGORITHM)
@@ -108,7 +100,7 @@ def decode_token(token: str, expected_type: str = "access") -> dict:
 
 # ── Shared Auth Dependencies ───────────────────────────────────────────────────
 async def get_current_user_code(
-    credentials: Optional[HTTPAuthorizationCredentials] = Depends(bearer_scheme),
+    credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
 ) -> uuid.UUID:
     """
     FastAPI dependency that extracts the authenticated user's UUID from the
@@ -125,7 +117,7 @@ async def get_current_user_code(
         )
 
     payload = decode_token(credentials.credentials, expected_type="access")
-    user_code_str: Optional[str] = payload.get("sub")
+    user_code_str: str | None = payload.get("sub")
     if not user_code_str:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -135,7 +127,7 @@ async def get_current_user_code(
 
 
 async def get_current_user_role(
-    credentials: Optional[HTTPAuthorizationCredentials] = Depends(bearer_scheme),
+    credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
 ) -> str:
     """Extract the role claim from the JWT access token."""
     if credentials is None:

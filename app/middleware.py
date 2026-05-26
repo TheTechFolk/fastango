@@ -6,6 +6,7 @@ Wires up global application middlewares (TrustedHost, CORS, security headers,
 audit/timing logging). Middlewares are added innermost-first; the last
 add_middleware call becomes the outermost wrapper.
 """
+
 import logging
 import time
 
@@ -47,13 +48,9 @@ def configure_middleware(app: FastAPI) -> None:
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["X-Frame-Options"] = "DENY"
         response.headers["Referrer-Policy"] = "no-referrer"
-        response.headers["Permissions-Policy"] = (
-            "geolocation=(), microphone=(), camera=()"
-        )
+        response.headers["Permissions-Policy"] = "geolocation=(), microphone=(), camera=()"
         if settings.APP_ENV not in ("local", "test", "testing"):
-            response.headers["Strict-Transport-Security"] = (
-                "max-age=63072000; includeSubDomains"
-            )
+            response.headers["Strict-Transport-Security"] = "max-age=63072000; includeSubDomains"
         return response
 
     # ── CORS ────────────────────────────────────────────────────────────────

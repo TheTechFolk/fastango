@@ -56,18 +56,15 @@ async def test_admin_registration_ignores_is_superuser_field(
     )
     admin = result.scalars().first()
     assert admin is not None
-    assert admin.is_superuser is False, (
-        "SECURITY: registration must never honor a client-supplied is_superuser"
-    )
+    assert (
+        admin.is_superuser is False
+    ), "SECURITY: registration must never honor a client-supplied is_superuser"
 
 
 @pytest.mark.asyncio
 async def test_admin_registration_duplicate_email(client: AsyncClient, db_session: AsyncSession):
     """Verify duplicate registration returns 400 with a generic, non-enumerating message."""
-    payload = {
-        "email": "duplicate@fastango.com",
-        "password": "SuperSecretPassword123"
-    }
+    payload = {"email": "duplicate@fastango.com", "password": "SuperSecretPassword123"}
 
     resp1 = await client.post("/api/v1/auth/register", json=payload)
     assert resp1.status_code == 201
@@ -88,10 +85,7 @@ async def test_admin_login_success(client: AsyncClient, db_session: AsyncSession
     reg_resp = await client.post("/api/v1/auth/register", json=register_payload)
     assert reg_resp.status_code == 201
 
-    login_payload = {
-        "email": "loginadmin@fastango.com",
-        "password": "SecretPassword123"
-    }
+    login_payload = {"email": "loginadmin@fastango.com", "password": "SecretPassword123"}
     login_resp = await client.post("/api/v1/auth/login", json=login_payload)
     assert login_resp.status_code == 200
 
@@ -105,10 +99,7 @@ async def test_admin_login_success(client: AsyncClient, db_session: AsyncSession
 @pytest.mark.asyncio
 async def test_admin_login_invalid_credentials(client: AsyncClient):
     """Verify login fails with a 401 when using wrong email or password."""
-    payload = {
-        "email": "nonexistent@fastango.com",
-        "password": "WrongPassword123"
-    }
+    payload = {"email": "nonexistent@fastango.com", "password": "WrongPassword123"}
     response = await client.post("/api/v1/auth/login", json=payload)
     assert response.status_code == 401
     assert response.json()["detail"] == "Invalid email or password."

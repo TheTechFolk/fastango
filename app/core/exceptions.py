@@ -54,6 +54,7 @@ class ServiceException(FastangoException):
 
 # ── HTTP Exception shortcuts ─────────────────────────────────────────────────
 
+
 def http_404(detail: str = "Not found") -> HTTPException:
     return HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=detail)
 

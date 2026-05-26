@@ -1,5 +1,6 @@
 # app/modules/profile/router.py
 import uuid
+
 from fastapi import APIRouter, Depends, HTTPException, status
 
 from app.core.responses import APIResponse, success_response
@@ -24,4 +25,3 @@ async def get_profile(
             detail=error,
         )
     return success_response(data=data, message=PROFILE_RETRIEVED_MSG)
-

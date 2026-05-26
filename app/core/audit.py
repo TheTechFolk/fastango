@@ -1,7 +1,5 @@
 # app/core/audit.py
-import time
 import logging
-from typing import Optional
 
 from fastapi import Request, Response
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -23,7 +21,7 @@ class AuditLogService:
         request: Request,
         response: Response,
         process_time: float,
-        db: Optional[AsyncSession] = None,
+        db: AsyncSession | None = None,
     ) -> None:
         """
         Capture and persist request/response metadata.

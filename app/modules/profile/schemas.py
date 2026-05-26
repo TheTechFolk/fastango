@@ -1,5 +1,6 @@
 # app/modules/profile/schemas.py
 import uuid
+
 from pydantic import BaseModel, EmailStr
 
 

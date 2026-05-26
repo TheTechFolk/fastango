@@ -79,7 +79,7 @@ class OrderService:
     async def create(self, data: OrderCreateSchema):
         # Fetch the active session out of thin air
         db = get_db_session()
-        
+
         async with db.begin(): # Start a transaction block if needed
             order = Order(...)
             await OrderRepository.create(db, order)
@@ -127,7 +127,17 @@ pip install -r requirements.txt
 pip install aiosqlite greenlet  # Required to run the test suite
 ```
 
-### 3. Spin Up Auxiliary Services (Docker)
+### 3. Install Pre-commit Hooks
+Fastango uses `pre-commit` to automatically run standard git checks, code formatting, and linting (via Ruff) before every commit:
+```bash
+pre-commit install
+```
+You can also run pre-commit manually at any time to verify the entire codebase:
+```bash
+pre-commit run --all-files
+```
+
+### 4. Spin Up Auxiliary Services (Docker)
 Instead of installing PostgreSQL and Redis directly, spin them up as background containers:
 ```bash
 docker-compose up postgres redis -d
@@ -209,6 +219,37 @@ Fastango includes an integration and unit testing framework built around `pytest
 Ensure the virtual environment is active and run:
 ```bash
 pytest -v
+```
+
+---
+
+## 🧹 Code Quality & Formatting (`pre-commit` & `ruff`)
+
+To maintain clean, standardized, and PEP 8 compliant code, Fastango integrates **Ruff** (a super-fast Python linter and formatter) with **pre-commit** hooks. This automatically runs quality checks before any changes are committed to Git.
+
+### Installed Hooks
+1. **Git Sanity Checks**: Automatic trailing whitespace removal, end-of-file validation, and YAML parsing validation.
+2. **Ruff Linting**: Automatically checks for Python pep8 compliance, unused imports, logic errors, and automatically fixes safe warnings (`args: [ --fix ]`).
+3. **Ruff Formatting**: Automatically reformats all source code to conform to modern Python formatting standards (fully replaces Black).
+
+### Usage & Setup
+
+#### 1. First-time Setup
+Install the pre-commit Git hooks in your local `.git` hooks folder:
+```bash
+pre-commit install
+```
+
+#### 2. Run Manually
+To check or format the entire repository manually at any time:
+```bash
+pre-commit run --all-files
+```
+
+#### 3. Bypassing Hooks (Emergency Only)
+If you ever need to bypass the checks for a temporary commit:
+```bash
+git commit -m "wip" --no-verify
 ```
 
 ---

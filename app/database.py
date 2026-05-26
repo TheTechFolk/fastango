@@ -1,6 +1,6 @@
 # app/database.py
+from collections.abc import AsyncGenerator
 from contextvars import ContextVar
-from typing import AsyncGenerator
 
 from fastapi import Depends
 from sqlalchemy.ext.asyncio import (
@@ -72,4 +72,3 @@ async def inject_db_session_context(db: AsyncSession = Depends(get_db)):
         yield
     finally:
         db_session_ctx.reset(token)
-

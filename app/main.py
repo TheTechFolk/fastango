@@ -6,6 +6,7 @@ Boots the FastAPI instance, wires centralized middleware and exception
 handlers, then auto-discovers every module under app/modules/ and mounts
 the ones that expose a ModuleConfig in apps.py.
 """
+
 import logging
 from contextlib import asynccontextmanager
 

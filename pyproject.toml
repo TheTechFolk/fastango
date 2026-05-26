@@ -30,6 +30,8 @@ pytest-asyncio = "^0.24.0"
 aiosqlite = "^0.20.0"
 ruff = "^0.8.0"
 mypy = "^1.13.0"
+pre-commit = "^3.7.1"
+
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
@@ -41,7 +43,8 @@ target-version = "py312"
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "N", "UP"]
-ignore = ["E712"]
+ignore = ["E712", "N818"]
+
 
 [build-system]
 requires = ["poetry-core"]
