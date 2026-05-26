@@ -1,0 +1,48 @@
+[tool.poetry]
+name = "fastango"
+version = "1.0.0"
+description = "Fastango — A Django-inspired modular FastAPI framework"
+authors = ["Your Name <you@example.com>"]
+readme = "README.md"
+license = "MIT"
+packages = [{ include = "app" }]
+
+[tool.poetry.dependencies]
+python = "^3.12"
+fastapi = "^0.115.5"
+uvicorn = { version = "^0.32.0", extras = ["standard"] }
+sqlalchemy = "^2.0.36"
+asyncpg = "^0.30.0"
+alembic = "^1.14.0"
+pydantic = "^2.10.3"
+pydantic-settings = "^2.6.1"
+python-jose = { version = "^3.3.0", extras = ["cryptography"] }
+passlib = { version = "^1.7.4", extras = ["bcrypt"] }
+bcrypt = "^4.2.1"
+email-validator = "^2.2.0"
+httpx = "^0.28.0"
+python-multipart = "^0.0.17"
+boto3 = "^1.35.78"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^8.3.4"
+pytest-asyncio = "^0.24.0"
+aiosqlite = "^0.20.0"
+ruff = "^0.8.0"
+mypy = "^1.13.0"
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "N", "UP"]
+ignore = ["E712"]
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

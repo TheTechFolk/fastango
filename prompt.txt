@@ -1,0 +1,14 @@
+You are an expert Python developer specializing in FastAPI and Clean Architecture. 
+
+I am providing you in this working directory with a complete architecture design spec file: `Project_Overview.md`. 
+Your task is to act as an automated code generator and output a ready-to-run, fully complete FastAPI boilerplate project directory.
+
+Please read the spec carefully and follow these strict requirements:
+1. Generate every file and folder specified in the section "3. Proposed FastAPI Project Template Structure". Do not omit any module folders (admin, customer, vendor, platform).
+2. For modules that do not have explicit code blueprints in the spec (e.g., vendor/menu, platform/order, admin/profile), extrapolate and mirror the structure and implementation patterns shown in the "customer/profile" blueprint.
+3. Implement actual working, clean mock code. Do not use generic "pass" or "TODO" comments. Every file must be complete and syntactically correct.
+4. Provide a requirements.txt file including standard FastAPI, Uvicorn, SQLAlchemy (asyncpg), Pydantic v2, and alembic.
+5. Provide a working main.py that mounts all domain routers, configures standard middleware, and sets up global exception handlers as specified.
+6. Provide a basic local.env file.
+
+Format your response as a series of code blocks with clear file path headings (e.g. `### File: app/database.py`) or package everything as a shell-runnable script that creates the directory structure and files programmatically.
