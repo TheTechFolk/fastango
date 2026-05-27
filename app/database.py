@@ -3,12 +3,13 @@ from collections.abc import AsyncGenerator
 from contextvars import ContextVar
 
 from fastapi import Depends
+from sqlalchemy import event
 from sqlalchemy.ext.asyncio import (
     AsyncSession,
     async_sessionmaker,
     create_async_engine,
 )
-from sqlalchemy.orm import declarative_base
+from sqlalchemy.orm import Session, declarative_base
 
 from app.config import settings
 
@@ -46,21 +47,59 @@ def get_db_session() -> AsyncSession:
         raise RuntimeError("No database session in the current context.")
 
 
+# ── Uncommitted-write guard ───────────────────────────────────────────────────
+# Tracks whether the session has writes that need a commit. Without this guard,
+# a service that mutates the DB without `async with db.begin():` would silently
+# lose its work — the session closes, the open transaction rolls back, and the
+# request still returns 200. Better to fail loud.
+
+
+@event.listens_for(Session, "after_flush")
+def _flag_pending_writes(session: Session, flush_context) -> None:
+    session.info["has_pending_writes"] = True
+
+
+@event.listens_for(Session, "after_commit")
+def _clear_on_commit(session: Session) -> None:
+    session.info["has_pending_writes"] = False
+
+
+@event.listens_for(Session, "after_rollback")
+def _clear_on_rollback(session: Session) -> None:
+    session.info["has_pending_writes"] = False
+
+
+def _has_uncommitted_writes(session: AsyncSession) -> bool:
+    """True if the session has dirty/new/deleted objects or unflushed-committed work."""
+    sync = session.sync_session
+    return bool(sync.info.get("has_pending_writes") or sync.new or sync.dirty or sync.deleted)
+
+
 # ── FastAPI Dependency ────────────────────────────────────────────────────────
 async def get_db() -> AsyncGenerator[AsyncSession, None]:
     """
     Yield a SQLAlchemy AsyncSession as a FastAPI dependency.
-    Automatically commits on success or rolls back on exception.
+
+    Transaction management is owned by services (`async with db.begin():`).
+    On request end this dependency:
+      - rolls back on an unhandled exception, or
+      - raises RuntimeError if writes are still pending — catches the bug
+        where a service mutated the DB without an explicit transaction.
     """
     async with async_session_factory() as session:
         try:
             yield session
-            await session.commit()
         except Exception:
             await session.rollback()
             raise
-        finally:
-            await session.close()
+        else:
+            if _has_uncommitted_writes(session):
+                await session.rollback()
+                raise RuntimeError(
+                    "Uncommitted writes detected at request end. Wrap service "
+                    "mutations in `async with db.begin():` so the transaction "
+                    "boundary is explicit."
+                )
 
 
 async def inject_db_session_context(db: AsyncSession = Depends(get_db)):

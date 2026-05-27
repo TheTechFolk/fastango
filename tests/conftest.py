@@ -20,7 +20,7 @@ import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
-from app.database import Base, get_db
+from app.database import Base, _has_uncommitted_writes, get_db
 from app.main import app
 
 # ── In-Memory Test Database ───────────────────────────────────────────────────
@@ -54,16 +54,24 @@ async def setup_database():
 
 @pytest_asyncio.fixture
 async def db_session() -> AsyncGenerator[AsyncSession, None]:
-    """Yield a test database session with automatic rollback."""
+    """
+    Yield a test database session. Transaction management is service-owned
+    (services use `async with db.begin():`), matching production `get_db()`,
+    and the same uncommitted-write guard is enforced here.
+    """
     async with TestSessionFactory() as session:
         try:
             yield session
-            await session.commit()
         except Exception:
             await session.rollback()
             raise
-        finally:
-            await session.close()
+        else:
+            if _has_uncommitted_writes(session):
+                await session.rollback()
+                raise RuntimeError(
+                    "Test left uncommitted writes on the session. Wrap setup "
+                    "mutations in `async with db_session.begin():`."
+                )
 
 
 @pytest_asyncio.fixture
