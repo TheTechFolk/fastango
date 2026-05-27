@@ -141,7 +141,7 @@ Modules are auto-discovered by [app/core/registry.py](app/core/registry.py): dro
 ## 🔐 API Endpoints
 
 ### 🔑 Authentication
-* `POST /api/v1/auth/register` — Register a new admin account
+* `POST /api/v1/auth/register` — Register a new user account
 * `POST /api/v1/auth/login` — Authenticate credentials and get JWT token pair
 
 ### 🏠 Home

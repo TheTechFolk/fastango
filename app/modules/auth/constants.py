@@ -1,9 +1,9 @@
 # app/modules/auth/constants.py
 
 # ── Success Messages ──────────────────────────────────────────────────────────
-ADMIN_REGISTER_SUCCESS_MSG = "Admin account created successfully."
-ADMIN_LOGIN_SUCCESS_MSG = "Admin login successful."
-ADMIN_LOGOUT_SUCCESS_MSG = "Admin logged out successfully."
+ADMIN_REGISTER_SUCCESS_MSG = "User account created successfully."
+ADMIN_LOGIN_SUCCESS_MSG = "User login successful."
+ADMIN_LOGOUT_SUCCESS_MSG = "User logged out successfully."
 TOKEN_REFRESH_SUCCESS_MSG = "Token refreshed successfully."
 PASSWORD_CHANGE_SUCCESS_MSG = "Password changed successfully."
 

@@ -19,7 +19,7 @@ async def test_admin_registration_success(client: AsyncClient, db_session: Async
 
     resp_json = response.json()
     assert resp_json["error"] is False
-    assert resp_json["message"] == "Admin account created successfully."
+    assert resp_json["message"] == "User account created successfully."
     assert "access_token" in resp_json["data"]
     assert "refresh_token" in resp_json["data"]
     assert resp_json["data"]["token_type"] == "bearer"
@@ -91,7 +91,7 @@ async def test_admin_login_success(client: AsyncClient, db_session: AsyncSession
 
     resp_json = login_resp.json()
     assert resp_json["error"] is False
-    assert resp_json["message"] == "Admin login successful."
+    assert resp_json["message"] == "User login successful."
     assert "access_token" in resp_json["data"]
     assert "refresh_token" in resp_json["data"]
 

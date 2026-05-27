@@ -39,7 +39,7 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
 # ── JWT Encode ─────────────────────────────────────────────────────────────────
 def create_access_token(
     subject: str | uuid.UUID,
-    role: str = "customer",
+    role: str = "user",
     expires_delta: timedelta | None = None,
 ) -> str:
     """Generate a short-lived signed JWT access token."""
@@ -132,11 +132,11 @@ async def get_current_user_role(
     """Extract the role claim from the JWT access token."""
     if credentials is None:
         if settings.APP_ENV in _DEV_ENVS:
-            return "customer"
+            return "user"
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Not authenticated. Bearer token is missing.",
             headers={"WWW-Authenticate": "Bearer"},
         )
     payload = decode_token(credentials.credentials, expected_type="access")
-    return payload.get("role", "customer")
+    return payload.get("role", "user")

@@ -31,7 +31,7 @@ class ModuleConfig:
             name = "auth"
             router = router
             prefix = "/auth"
-            tags = ["Auth — Admin"]
+            tags = ["Auth"]
     """
 
     name: str = ""

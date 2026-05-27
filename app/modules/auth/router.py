@@ -18,7 +18,7 @@ router = APIRouter()
     "/register",
     response_model=APIResponse[AdminTokenOutSchema],
     status_code=status.HTTP_201_CREATED,
-    summary="Register a new admin account",
+    summary="Register a new user account",
 )
 @limiter.limit(settings.RATE_LIMIT_REGISTER)
 async def register(
@@ -26,7 +26,7 @@ async def register(
     payload: AdminRegisterSchema,
 ):
     """
-    Create a new admin account and return a JWT token pair.
+    Create a new user account and return a JWT token pair.
 
     New accounts are always created as non-superuser. Use a separate
     superadmin-protected endpoint to elevate privileges.
@@ -41,14 +41,15 @@ async def register(
 @router.post(
     "/login",
     response_model=APIResponse[AdminTokenOutSchema],
-    summary="Admin login",
+    summary="User login",
 )
 @limiter.limit(settings.RATE_LIMIT_LOGIN)
 async def login(
     request: Request,
     payload: AdminLoginSchema,
 ):
-    """Validate admin credentials and return a JWT access + refresh token pair."""
+    """Validate user credentials and return a JWT access + refresh token pair."""
+
     service = AdminAuthService()
     data, msg = await service.login(payload)
     if data is None:
