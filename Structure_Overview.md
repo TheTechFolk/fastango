@@ -171,17 +171,16 @@ async_session = async_sessionmaker(
 
 Base = declarative_base()
 
-# FastAPI Dependency
+# FastAPI Dependency — no auto-commit: services own transaction boundaries
+# via `async with db.begin():`. An uncommitted-write guard fails the request
+# loudly if writes are left pending at request end (see app/database.py).
 async def get_db() -> AsyncGenerator[AsyncSession, None]:
     async with async_session() as session:
         try:
             yield session
-            await session.commit()
         except Exception:
             await session.rollback()
             raise
-        finally:
-            await session.close()
 ```
 
 ### 4.2. Core Response Envelope (`app/core/responses.py`)
