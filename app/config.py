@@ -26,6 +26,16 @@ class Settings(BaseSettings):
     # production this MUST be tightened to your actual hostnames via env var.
     ALLOWED_HOSTS: list[str] = ["localhost", "127.0.0.1", "testserver"]
 
+    # ── Modules ───────────────────────────────────────────────────────────
+    # Which modules under app/modules/ get their routers mounted.
+    # ENABLED_MODULES empty  → mount every discovered module (default).
+    # ENABLED_MODULES set    → mount only the listed modules.
+    # DISABLED_MODULES       → never mount these, even if listed as enabled.
+    # Disabled modules keep their models imported so Alembic migrations stay
+    # complete (disabled ≠ uninstalled, same as Django).
+    ENABLED_MODULES: list[str] = []
+    DISABLED_MODULES: list[str] = []
+
     # ── Database ──────────────────────────────────────────────────────────
     # No default — fail fast if missing. local.env provides it for development.
     DATABASE_URL: str

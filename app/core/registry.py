@@ -18,6 +18,8 @@ from collections.abc import Iterator
 
 from fastapi import APIRouter, FastAPI
 
+from app.config import settings
+
 logger = logging.getLogger("fastango.registry")
 
 
@@ -32,12 +34,16 @@ class ModuleConfig:
             router = router
             prefix = "/auth"
             tags = ["Auth"]
+            # Optional: guards applied to EVERY route in this module,
+            # e.g. dependencies = [Depends(get_current_user_code)]
+            dependencies = []
     """
 
     name: str = ""
     router: APIRouter | None = None
     prefix: str = ""
     tags: list[str] = []
+    dependencies: list = []
 
     async def on_startup(self) -> None:
         """Override to run code when the application starts."""
@@ -70,6 +76,19 @@ def import_all_models() -> None:
             raise
 
 
+def _module_enabled(name: str) -> bool:
+    """
+    Decide whether a module's router gets mounted, based on settings.
+
+    DISABLED_MODULES always wins; otherwise an empty ENABLED_MODULES means
+    "mount everything". Models of disabled modules are still imported so
+    Alembic migrations stay complete (disabled ≠ uninstalled).
+    """
+    if name in settings.DISABLED_MODULES:
+        return False
+    return not settings.ENABLED_MODULES or name in settings.ENABLED_MODULES
+
+
 def _find_config_class(module) -> type[ModuleConfig] | None:
     """Find the first ModuleConfig subclass defined in `module`."""
     for attr_name in dir(module):
@@ -93,6 +112,10 @@ def discover_modules(app: FastAPI, prefix: str = "/api/v1") -> list[ModuleConfig
     configs: list[ModuleConfig] = []
 
     for name in _iter_module_names():
+        if not _module_enabled(name):
+            logger.info("Module '%s' disabled via settings — not mounted", name)
+            continue
+
         try:
             apps_mod = importlib.import_module(f"app.modules.{name}.apps")
         except ModuleNotFoundError as exc:
@@ -112,6 +135,7 @@ def discover_modules(app: FastAPI, prefix: str = "/api/v1") -> list[ModuleConfig
                 config.router,
                 prefix=config.prefix,
                 tags=list(config.tags),
+                dependencies=list(config.dependencies),
             )
             logger.info("Mounted module '%s' at %s%s", config.name, prefix, config.prefix)
         configs.append(config)
