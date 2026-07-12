@@ -15,7 +15,7 @@ Fastango uses a domain-driven, modular FastAPI design inspired by Django's struc
 * **Modules (`app/modules/`)** — Individual directories housing independent business features.
 
 Each module follows a consistent layered pattern:
-1. **Module Config (`apps.py`)** — Declares a `ModuleConfig` subclass with `name`, `router`, `prefix`, `tags`, plus optional `on_startup` / `on_shutdown` hooks. The registry discovers it automatically. Modules without an `apps.py` (e.g. `common`) are skipped for routing but their models are still imported.
+1. **Module Config (`apps.py`)** — Declares a `ModuleConfig` subclass with `name`, `router`, `prefix`, `tags`, plus optional `dependencies` (guards applied to every route in the module) and `on_startup` / `on_shutdown` hooks. The registry discovers it automatically. Modules without an `apps.py` (e.g. `common`) are skipped for routing but their models are still imported.
 2. **Database Schema (`models.py`)** — SQLAlchemy ORM table definitions. Optional if the module owns no tables.
 3. **Query Layer (`repositories.py`)** — Async DB transactions and raw queries. Optional if the module is read-only or doesn't touch the DB.
 4. **Validation (`schemas.py`)** — Pydantic request/response shapes.
@@ -24,12 +24,15 @@ Each module follows a consistent layered pattern:
 
 ### Adding a New Module
 
+Copy the skeleton from `templates/module/` — no CLI, no manual file creation:
+
 ```bash
-mkdir -p app/modules/orders
-touch app/modules/orders/{__init__,apps,router,services,schemas,models,repositories}.py
+cp -r templates/module app/modules/orders
+grep -rl "sample\|Sample" app/modules/orders | xargs sed -i 's/sample/orders/g; s/Sample/Orders/g'
+rm app/modules/orders/README.md
 ```
 
-Then in `app/modules/orders/apps.py`:
+The copied `apps.py` looks like this:
 ```python
 from app.core.registry import ModuleConfig
 from app.modules.orders.router import router
@@ -39,9 +42,40 @@ class OrdersConfig(ModuleConfig):
     router = router
     prefix = "/orders"
     tags = ["Orders"]
+    # Optional: guards applied to EVERY route in this module
+    # dependencies = [Depends(get_current_user_code)]
 ```
 
 That's it. The registry picks it up on next boot — no edits to `main.py`, no central registry to maintain, no Alembic plumbing.
+
+### Enabling / Disabling Modules
+
+Which modules get mounted is controlled from settings (JSON lists in `local.env` or env vars):
+
+```bash
+ENABLED_MODULES=["auth","profile"]   # empty (default) = mount all discovered modules
+DISABLED_MODULES=["home"]            # never mounted — always wins over enabled
+```
+
+Disabled modules keep their `models.py` imported, so SQLAlchemy metadata and Alembic migrations stay complete — disabled ≠ uninstalled, mirroring Django's `INSTALLED_APPS` semantics.
+
+### Module-level Dependencies
+
+`ModuleConfig.dependencies` applies FastAPI dependencies to **every** route in the module, so guards live in one place instead of being repeated per endpoint:
+
+```python
+from fastapi import Depends
+from app.core.security import get_current_user_code
+
+class OrdersConfig(ModuleConfig):
+    name = "orders"
+    router = router
+    prefix = "/orders"
+    tags = ["Orders"]
+    dependencies = [Depends(get_current_user_code)]
+```
+
+Use module-level dependencies for pure guards (auth checks, feature flags). If a route needs the dependency's *return value* (e.g. the user code itself), declare it in the route signature as usual.
 
 ---
 
@@ -52,7 +86,7 @@ Fastango uses a modern, **request-scoped ContextVar pattern** to manage database
 ### How It Works Under the Hood
 1. **Request Lifecycle**: When a new HTTP request arrives, a global FastAPI dependency (`inject_db_session_context`) opens an asynchronous SQLAlchemy session from our session factory.
 2. **Context Binding**: The session is bound to an async-safe `contextvars.ContextVar` unique to the current request execution context.
-3. **Automatic Cleanup**: When the request completes, the global dependency automatically commits any pending database transactions (or rolls back on error) and closes the session.
+3. **Cleanup — no auto-commit**: When the request completes, the session is closed and any unhandled exception triggers a rollback. The dependency does **not** commit for you — transaction boundaries are owned by services (see below). If a request ends with uncommitted writes, Fastango raises a `RuntimeError` instead of silently discarding the data.
 
 ### How to use `get_db_session()` in your modules
 
@@ -80,10 +114,29 @@ class OrderService:
         # Fetch the active session out of thin air
         db = get_db_session()
 
-        async with db.begin(): # Start a transaction block if needed
+        async with db.begin(): # REQUIRED for writes — services own the transaction
             order = Order(...)
             await OrderRepository.create(db, order)
 ```
+
+### Transaction Ownership (Important)
+
+`get_db()` does **not** auto-commit. Every service that writes must wrap its mutations in an explicit transaction block:
+
+```python
+db = get_db_session()
+async with db.begin():   # commits on success, rolls back on exception
+    db.add(obj)
+```
+
+A safety net in [app/database.py](app/database.py) (the *uncommitted-write guard*) detects requests that end with pending writes and fails them loudly:
+
+```
+RuntimeError: Uncommitted writes detected at request end. Wrap service
+mutations in `async with db.begin():` so the transaction boundary is explicit.
+```
+
+This turns the classic "forgot to commit → data silently lost" bug into an immediate, obvious error. Read-only operations need no transaction block. The same guard is enforced in the test fixture (`tests/conftest.py`), so tests fail the same way production would.
 
 ### Writing Tests with `get_db_session()`
 The `ContextVar` binder dynamically resolves standard FastAPI dependencies. When writing tests, our test client's `dependency_overrides[get_db]` will override the base session automatically, meaning your test database sessions work **flawlessly out of the box** without any special configuration.

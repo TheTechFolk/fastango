@@ -20,7 +20,7 @@ Fastango is designed for:
 
 ## ✨ Key Features
 * 🧩 **Django-like Mini Apps**: Each feature lives in its own self-contained app.
-* 🔌 **Pluggable Architecture**: Enable/disable apps dynamically.
+* 🔌 **Pluggable Architecture**: Enable/disable apps via `ENABLED_MODULES` / `DISABLED_MODULES` settings — no code changes.
 * 🔐 **DRM & Access Control Ready**: Built-in hooks for license checks, permissions, and policies.
 * ⚡ **FastAPI Native**: Fully compatible with FastAPI dependencies, routers, and async.
 * 🏗️ **Clean Project Structure**: Opinionated but flexible layout for long-term maintainability.
@@ -50,6 +50,8 @@ fastango_v1/
 │       ├── auth/            # Shared authentication (register & login)
 │       ├── home/            # General landing overview / dashboard
 │       └── profile/         # User profile management
+├── templates/
+│   └── module/              # Copyable skeleton for new modules (cp -r, no CLI)
 ├── tests/
 │   ├── conftest.py          # Async pytest fixtures (in-memory DB)
 │   └── modules/             # Integration tests per module
@@ -127,7 +129,7 @@ Each leaf module follows the same layered pattern:
 
 | Layer | File | Responsibility |
 |---|---|---|
-| Module Config | `apps.py` | `ModuleConfig` declaring name, router, prefix, tags, lifespan hooks |
+| Module Config | `apps.py` | `ModuleConfig` declaring name, router, prefix, tags, module-wide dependencies, lifespan hooks |
 | Database Schema | `models.py` | SQLAlchemy ORM table definitions (optional) |
 | Query Layer | `repositories.py` | Async DB read/write operations (optional) |
 | Validation | `schemas.py` | Pydantic request/response shapes |
@@ -135,6 +137,49 @@ Each leaf module follows the same layered pattern:
 | HTTP Controller | `router.py` | FastAPI endpoints — no prefix/tags (owned by `apps.py`) |
 
 Modules are auto-discovered by [app/core/registry.py](app/core/registry.py): drop a folder with an `apps.py` and it mounts automatically. No central registry to edit.
+
+---
+
+## 🧩 Working with Modules
+
+### Creating a New Module
+
+No CLI needed — copy the template and rename:
+
+```bash
+cp -r templates/module app/modules/orders
+grep -rl "sample\|Sample" app/modules/orders | xargs sed -i 's/sample/orders/g; s/Sample/Orders/g'
+rm app/modules/orders/README.md
+```
+
+Restart the server — the module mounts automatically at `/api/v1/orders`.
+
+### Enabling / Disabling Modules
+
+Control which modules mount via `local.env` (JSON lists):
+
+```bash
+ENABLED_MODULES=["auth","profile"]   # empty (default) = mount all
+DISABLED_MODULES=["home"]            # always wins over enabled
+```
+
+Disabled modules keep their models registered so Alembic migrations stay complete — disabled ≠ uninstalled, same as Django's `INSTALLED_APPS` semantics.
+
+### Module-level Dependencies
+
+Guard every route in a module from one place in its `apps.py`:
+
+```python
+from fastapi import Depends
+from app.core.security import get_current_user_code
+
+class OrdersConfig(ModuleConfig):
+    name = "orders"
+    router = router
+    prefix = "/orders"
+    tags = ["Orders"]
+    dependencies = [Depends(get_current_user_code)]  # applied to all routes
+```
 
 ---
 
