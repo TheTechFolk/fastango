@@ -1,77 +1,47 @@
 # app/core/security.py
-import uuid
-from datetime import UTC, datetime, timedelta
+"""
+Credential verification — the half of auth that runs on every request.
 
-import bcrypt
+Signing tokens and hashing passwords happen only at register and login, so they
+live in app/modules/auth/utils.py. Decoding happens on every private request,
+which is why it stays here: app/middleware.py needs it, and core importing from
+a module would invert the dependency the module registry rests on — delete the
+auth module and the whole app would stop booting rather than just that module.
+
+    auth/utils.py     issues credentials  (hash, sign)
+    core/security.py  verifies them       (decode, identify)
+"""
+
+import uuid
+from collections.abc import Callable
+
 import jwt
-from fastapi import Depends, HTTPException, status
-from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from fastapi import Depends, HTTPException, Request, status
+from fastapi.security import HTTPBearer
 from jwt.exceptions import InvalidTokenError
 
 from app.config import settings
+from app.core.constants import ACCESS_TOKEN_TYPE, FORBIDDEN_MSG, RoleType
 
 # ── Bearer Token Scheme ────────────────────────────────────────────────────────
+# Attached to the private router so Swagger renders an Authorize button and the
+# docs can actually exercise a protected endpoint. auto_error=False because
+# rejection is the middleware's job — this scheme only describes the header.
 bearer_scheme = HTTPBearer(auto_error=False)
 
-_DEV_ENVS = ("local", "test", "testing")
+# The algorithms a token may be signed with, hardcoded. Taking this list from
+# settings means JWT_ALGORITHM=none makes the decoder accept unsigned tokens;
+# only the *signing* side has any reason to be configurable.
+ACCEPTED_ALGORITHMS = ["HS256", "HS384", "HS512"]
 
-
-# ── Password Hashing ──────────────────────────────────────────────────────────
-def hash_password(plain_password: str) -> str:
-    """
-    Hash a plain-text password using bcrypt.
-
-    Note: bcrypt silently truncates inputs longer than 72 bytes. Enforce a
-    length cap at the schema layer or pre-hash if you need longer passwords.
-    """
-    return bcrypt.hashpw(plain_password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
-
-
-def verify_password(plain_password: str, hashed_password: str) -> bool:
-    """Verify a plain-text password against its bcrypt hash."""
-    try:
-        return bcrypt.checkpw(plain_password.encode("utf-8"), hashed_password.encode("utf-8"))
-    except ValueError:
-        # Malformed hash → treat as failed verification, never raise.
-        return False
-
-
-# ── JWT Encode ─────────────────────────────────────────────────────────────────
-def create_access_token(
-    subject: str | uuid.UUID,
-    role: str = "user",
-    expires_delta: timedelta | None = None,
-) -> str:
-    """Generate a short-lived signed JWT access token."""
-    expire = datetime.now(UTC) + (
-        expires_delta or timedelta(minutes=settings.JWT_ACCESS_TOKEN_EXPIRE_MINUTES)
-    )
-    payload = {
-        "sub": str(subject),
-        "role": role,
-        "exp": expire,
-        "iat": datetime.now(UTC),
-        "type": "access",
-    }
-    return jwt.encode(payload, settings.SECRET_KEY, algorithm=settings.JWT_ALGORITHM)
-
-
-def create_refresh_token(subject: str | uuid.UUID) -> str:
-    """Generate a long-lived signed JWT refresh token."""
-    expire = datetime.now(UTC) + timedelta(days=settings.JWT_REFRESH_TOKEN_EXPIRE_DAYS)
-    payload = {
-        "sub": str(subject),
-        "exp": expire,
-        "iat": datetime.now(UTC),
-        "type": "refresh",
-    }
-    return jwt.encode(payload, settings.SECRET_KEY, algorithm=settings.JWT_ALGORITHM)
+# Claims a token must carry. PyJWT validates `exp` only when it is present, so
+# without this a token minted with no expiry is valid forever.
+REQUIRED_CLAIMS = ["exp", "iat", "sub", "type"]
 
 
 # ── JWT Decode ─────────────────────────────────────────────────────────────────
-def decode_token(token: str, expected_type: str = "access") -> dict:
-    """
-    Decode and validate a JWT, asserting it matches the expected token type.
+def decode_token(token: str, expected_type: str = ACCESS_TOKEN_TYPE) -> dict:
+    """Decode and validate a JWT, asserting it matches the expected token type.
 
     Without the type check, a long-lived refresh token would be accepted as an
     access token if sent in the Authorization header.
@@ -80,7 +50,8 @@ def decode_token(token: str, expected_type: str = "access") -> dict:
         payload = jwt.decode(
             token,
             settings.SECRET_KEY,
-            algorithms=[settings.JWT_ALGORITHM],
+            algorithms=ACCEPTED_ALGORITHMS,
+            options={"require": REQUIRED_CLAIMS},
         )
     except InvalidTokenError as exc:
         raise HTTPException(
@@ -99,44 +70,55 @@ def decode_token(token: str, expected_type: str = "access") -> dict:
 
 
 # ── Shared Auth Dependencies ───────────────────────────────────────────────────
-async def get_current_user_code(
-    credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
-) -> uuid.UUID:
+# The auth middleware has already decoded the token and rejected the request if
+# it was missing or invalid, so these are cheap reads of what it stored — no
+# second decode, and no second place that decides what "authenticated" means.
+#
+# There is deliberately no environment that waives these. The bypass this
+# replaces returned a mock identity whenever APP_ENV was local/test — it shipped
+# in the production image and was one env var from disabling auth entirely.
+def _unauthenticated() -> HTTPException:
+    return HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Not authenticated. Bearer token is missing.",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+
+
+async def get_current_user_code(request: Request) -> uuid.UUID:
+    """The authenticated caller's UUID, as taken from the access token.
+
+    Also the private router's route-level guard: the URL-prefix check in the
+    middleware is the only other thing standing between /private and the world,
+    and a single mounting mistake would silently open it.
     """
-    FastAPI dependency that extracts the authenticated user's UUID from the
-    Bearer JWT token. In local/test environments only, falls back to a mock
-    UUID when no token is supplied.
+    user_code = getattr(request.state, "user_code", None)
+    if not user_code:
+        # Only reachable if a route is public but asks who is calling.
+        raise _unauthenticated()
+    try:
+        return uuid.UUID(str(user_code))
+    except ValueError as exc:
+        # A token whose `sub` is not a UUID is a bad token, not a server fault.
+        raise _unauthenticated() from exc
+
+
+async def get_current_user_role(request: Request) -> str:
+    """The authenticated caller's role claim."""
+    return getattr(request.state, "role", None) or RoleType.USER.value
+
+
+def require_role(*allowed: RoleType) -> Callable:
+    """Route dependency asserting the caller holds one of `allowed`.
+
+    Note the role comes from the token, so a demotion takes effect no sooner
+    than the token expires — acceptable for coarse gating, not for revocation.
     """
-    if credentials is None:
-        if settings.APP_ENV in _DEV_ENVS:
-            return uuid.UUID("3fa85f64-5717-4562-b3fc-2c963f66afa6")
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Not authenticated. Bearer token is missing.",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
+    permitted = {role.value for role in allowed}
 
-    payload = decode_token(credentials.credentials, expected_type="access")
-    user_code_str: str | None = payload.get("sub")
-    if not user_code_str:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Token subject missing.",
-        )
-    return uuid.UUID(user_code_str)
+    async def guard(role: str = Depends(get_current_user_role)) -> str:
+        if role not in permitted:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=FORBIDDEN_MSG)
+        return role
 
-
-async def get_current_user_role(
-    credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
-) -> str:
-    """Extract the role claim from the JWT access token."""
-    if credentials is None:
-        if settings.APP_ENV in _DEV_ENVS:
-            return "user"
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Not authenticated. Bearer token is missing.",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-    payload = decode_token(credentials.credentials, expected_type="access")
-    return payload.get("role", "user")
+    return guard
