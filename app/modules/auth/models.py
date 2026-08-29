@@ -1,32 +1,38 @@
 # app/modules/auth/models.py
 import uuid
 
-from sqlalchemy import Boolean, String
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy import String, Uuid
 from sqlalchemy.orm import Mapped, mapped_column
 
+from app.core.constants import RoleType
 from app.modules.common.models import CommonFieldBase
 
 
-class AdminAuth(CommonFieldBase):
-    """
-    Authentication record for a platform admin user.
+class Auth(CommonFieldBase):
+    """A login identity: email, password, role.
 
-    Moved to app/modules/auth/ — a shared, top-level auth module
-    that is not coupled to any specific domain sub-directory.
+    `is_active`, `created_at` and `updated_at` come from CommonFieldBase.
     """
 
-    __tablename__ = "admin_auth"
+    __tablename__ = "auth"
 
-    id: Mapped[int] = mapped_column(primary_key=True, index=True, autoincrement=True)
-    admin_code: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    # Public identifier and JWT subject, so the sequential primary key is never
+    # exposed to clients. sqlalchemy.Uuid (not the postgresql dialect type)
+    # renders natively on Postgres and as CHAR(32) on the SQLite test DB.
+    code: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True),
         default=uuid.uuid4,
         nullable=False,
         unique=True,
         index=True,
     )
     email: Mapped[str] = mapped_column(String(255), nullable=False, unique=True, index=True)
-    password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
-    is_superuser: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
-    is_verified: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true")
+    # bcrypt hash — never plaintext.
+    password: Mapped[str] = mapped_column(String(255), nullable=False)
+    role: Mapped[str] = mapped_column(
+        String(32),
+        nullable=False,
+        default=RoleType.USER.value,
+        server_default=RoleType.USER.value,
+    )

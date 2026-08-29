@@ -1,75 +1,74 @@
 # app/core/exceptions.py
-from fastapi import HTTPException, status
+"""
+Fastango — Application Exceptions
+
+Each exception carries both its HTTP status and its default message, so no call
+site ever writes a status code. `app/exceptions.py` registers a single handler
+for the whole family and reads both off the instance — adding a new type never
+requires touching a handler.
+
+    raise NotFoundException()                      -> 404, "Resource not found."
+    raise UnauthorizedException("Bad password.")   -> 401, "Bad password."
+"""
+
+from app.core.constants import (
+    ALREADY_EXISTS_MSG,
+    ERROR_MSG,
+    FORBIDDEN_MSG,
+    NOT_FOUND_MSG,
+    UNAUTHORIZED_MSG,
+    VALIDATION_ERROR_MSG,
+)
 
 
-class FastangoException(Exception):
+class AppException(Exception):
     """Base class for all custom Fastango application exceptions."""
 
-    def __init__(self, message: str = "An unexpected error occurred."):
-        self.message = message
+    status_code: int = 500
+    message: str = ERROR_MSG
+
+    def __init__(self, message: str | None = None):
+        # Caller's message wins; the class default fills in.
+        self.message = message or self.message
         super().__init__(self.message)
 
 
-class NotFoundException(FastangoException):
-    """Raised when a requested resource is not found."""
+class ValidationException(AppException):
+    """Business-rule validation failed inside a service."""
 
-    def __init__(self, resource: str = "Resource"):
-        super().__init__(f"{resource} not found.")
-
-
-class AlreadyExistsException(FastangoException):
-    """Raised when attempting to create a resource that already exists."""
-
-    def __init__(self, resource: str = "Resource"):
-        super().__init__(f"{resource} already exists.")
+    status_code = 400
+    message = VALIDATION_ERROR_MSG
 
 
-class UnauthorizedException(FastangoException):
-    """Raised when an unauthenticated request is made to a protected route."""
+class UnauthorizedException(AppException):
+    """The request is unauthenticated, or its credentials are wrong."""
 
-    def __init__(self, message: str = "Authentication credentials were not provided."):
-        super().__init__(message)
-
-
-class ForbiddenException(FastangoException):
-    """Raised when an authenticated user lacks permission for an action."""
-
-    def __init__(self, message: str = "You do not have permission to perform this action."):
-        super().__init__(message)
+    status_code = 401
+    message = UNAUTHORIZED_MSG
 
 
-class ValidationException(FastangoException):
-    """Raised when business-rule validation fails inside a service layer."""
+class ForbiddenException(AppException):
+    """The caller is authenticated but lacks permission."""
 
-    def __init__(self, message: str = "Validation failed."):
-        super().__init__(message)
-
-
-class ServiceException(FastangoException):
-    """Generic service-layer exception for unexpected business logic failures."""
-
-    def __init__(self, message: str = "A service error occurred."):
-        super().__init__(message)
+    status_code = 403
+    message = FORBIDDEN_MSG
 
 
-# ── HTTP Exception shortcuts ─────────────────────────────────────────────────
+class NotFoundException(AppException):
+    """A requested resource does not exist."""
+
+    status_code = 404
+    message = NOT_FOUND_MSG
 
 
-def http_404(detail: str = "Not found") -> HTTPException:
-    return HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=detail)
+class AlreadyExistsException(AppException):
+    """A resource being created already exists.
 
+    Do NOT use this for account registration: a 409 confirms the email is
+    taken, which is exactly what the generic registration message exists to
+    hide. Use ValidationException there so the status keeps the same secret
+    the wording does.
+    """
 
-def http_400(detail: str = "Bad request") -> HTTPException:
-    return HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=detail)
-
-
-def http_401(detail: str = "Unauthorized") -> HTTPException:
-    return HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=detail)
-
-
-def http_403(detail: str = "Forbidden") -> HTTPException:
-    return HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=detail)
-
-
-def http_409(detail: str = "Conflict") -> HTTPException:
-    return HTTPException(status_code=status.HTTP_409_CONFLICT, detail=detail)
+    status_code = 409
+    message = ALREADY_EXISTS_MSG

@@ -1,41 +1,55 @@
 # app/modules/auth/schemas.py
-from pydantic import BaseModel, EmailStr, Field
+import uuid
+
+from pydantic import BaseModel, ConfigDict
+
+from app.core.responses import APIResponse
+from app.modules.common.schemas import EmailField, ExistingPasswordField, NewPasswordField
 
 
-class AdminRegisterSchema(BaseModel):
-    """Payload for self-service admin registration.
+class RegisterSchema(BaseModel):
+    """Payload for self-service registration.
 
-    `is_superuser` is intentionally NOT exposed here. Privilege elevation must
-    happen through a separate endpoint protected by a superadmin dependency.
+    `role` is intentionally NOT exposed. Privilege elevation must happen through
+    a separate endpoint protected by an admin dependency.
     """
 
-    email: EmailStr
-    password: str = Field(..., min_length=8, max_length=72, examples=["SecureAdminPass123!"])
+    email: EmailField
+    password: NewPasswordField
 
 
-class AdminLoginSchema(BaseModel):
-    """Payload for authenticating an admin with email and password."""
+class LoginSchema(BaseModel):
+    """Payload for authenticating with email and password."""
 
-    email: EmailStr
-    password: str = Field(..., min_length=1, max_length=72)
+    email: EmailField
+    password: ExistingPasswordField
 
 
-class AdminTokenOutSchema(BaseModel):
-    """JWT token pair response for a successfully authenticated admin."""
+class RefreshSchema(BaseModel):
+    """Payload for exchanging a refresh token for a new token pair."""
+
+    refresh_token: str
+
+
+class TokenOutSchema(BaseModel):
+    """JWT token pair for a successfully authenticated account."""
 
     access_token: str
     refresh_token: str
     token_type: str = "bearer"
 
 
-class TokenRefreshSchema(BaseModel):
-    """Payload for exchanging a refresh token for a new access token."""
+class MeOutSchema(BaseModel):
+    """The caller's own account."""
 
-    refresh_token: str
+    model_config = ConfigDict(from_attributes=True)
+
+    code: uuid.UUID
+    email: str
+    role: str
+    is_active: bool
 
 
-class PasswordChangeSchema(BaseModel):
-    """Payload for changing the admin's own password."""
-
-    current_password: str = Field(..., min_length=1, max_length=72)
-    new_password: str = Field(..., min_length=8, max_length=72)
+# Envelope aliases, so routers name one type instead of nesting generics inline.
+TokenResponse = APIResponse[TokenOutSchema]
+MeResponse = APIResponse[MeOutSchema]

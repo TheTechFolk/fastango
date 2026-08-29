@@ -1,4 +1,10 @@
 # app/modules/common/models.py
+"""Abstract ORM base classes shared by every module's tables.
+
+Base classes only. A domain enum or a helper with one caller does not belong
+here — it belongs with the module that owns it.
+"""
+
 from datetime import datetime
 
 from sqlalchemy import Boolean, DateTime, func
@@ -8,10 +14,7 @@ from app.database import Base
 
 
 class TimeStampedBase(Base):
-    """
-    Abstract mixin that provides automatic created_at and updated_at timestamp
-    columns on every table that inherits from it.
-    """
+    """Automatic created_at / updated_at on every table that inherits it."""
 
     __abstract__ = True
 
@@ -31,10 +34,7 @@ class TimeStampedBase(Base):
 
 
 class CommonFieldBase(TimeStampedBase):
-    """
-    Abstract mixin extending TimeStampedBase with a soft-delete is_active flag.
-    This replicates the Django CommonFieldModel used across the original project.
-    """
+    """TimeStampedBase plus a soft-delete `is_active` flag."""
 
     __abstract__ = True
 

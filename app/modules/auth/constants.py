@@ -1,19 +1,17 @@
 # app/modules/auth/constants.py
 
 # ── Success Messages ──────────────────────────────────────────────────────────
-ADMIN_REGISTER_SUCCESS_MSG = "User account created successfully."
-ADMIN_LOGIN_SUCCESS_MSG = "User login successful."
-ADMIN_LOGOUT_SUCCESS_MSG = "User logged out successfully."
-TOKEN_REFRESH_SUCCESS_MSG = "Token refreshed successfully."
-PASSWORD_CHANGE_SUCCESS_MSG = "Password changed successfully."
+REGISTER_SUCCESS_MSG = "Account created successfully."
+LOGIN_SUCCESS_MSG = "Login successful."
+REFRESH_SUCCESS_MSG = "Token refreshed successfully."
+ME_SUCCESS_MSG = "Account details retrieved successfully."
 
 # ── Error Messages ────────────────────────────────────────────────────────────
-# Generic credentials message — covers both "user not found" and "wrong password"
-# so the response cannot be used to enumerate registered accounts.
+# Generic credentials message — covers "user not found", "wrong password" and
+# "account disabled" alike, so the response cannot enumerate registered accounts.
 INVALID_CREDENTIALS_MSG = "Invalid email or password."
-ACCOUNT_INACTIVE_MSG = "This account has been deactivated."
 # Generic registration failure — does not confirm whether the email is already
-# registered, limiting email-enumeration via the public registration endpoint.
+# registered, limiting enumeration via the public registration endpoint.
 EMAIL_TAKEN_MSG = "Unable to register with the provided credentials."
-INVALID_REFRESH_TOKEN_MSG = "Invalid or expired refresh token."
-WRONG_CURRENT_PASSWORD_MSG = "Current password is incorrect."
+INVALID_REFRESH_MSG = "Invalid or expired refresh token."
+REGISTRATION_DISABLED_MSG = "Registration is currently closed."

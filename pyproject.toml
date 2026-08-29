@@ -1,51 +1,141 @@
-[tool.poetry]
+[project]
 name = "fastango"
 version = "1.0.0"
-description = "Fastango — A Django-inspired modular FastAPI framework"
-authors = ["Your Name <you@example.com>"]
+description = "Fastango — a Django-inspired modular FastAPI template"
+authors = [{ name = "Fastango maintainers" }]
 readme = "README.md"
-license = "MIT"
-packages = [{ include = "app" }]
+license = { text = "MIT" }
+requires-python = ">=3.12"
 
-[tool.poetry.dependencies]
-python = "^3.12"
-fastapi = "^0.115.5"
-uvicorn = { version = "^0.32.0", extras = ["standard"] }
-sqlalchemy = "^2.0.36"
-asyncpg = "^0.30.0"
-alembic = "^1.14.0"
-pydantic = "^2.10.3"
-pydantic-settings = "^2.6.1"
-python-jose = { version = "^3.3.0", extras = ["cryptography"] }
-passlib = { version = "^1.7.4", extras = ["bcrypt"] }
-bcrypt = "^4.2.1"
-email-validator = "^2.2.0"
-httpx = "^0.28.0"
-python-multipart = "^0.0.17"
-boto3 = "^1.35.78"
+# One source of truth. This used to be a Poetry block that omitted `slowapi`
+# (imported at boot, so `poetry install` produced a non-importable app) while
+# listing python-jose and passlib, which nothing imports. requirements.txt held
+# a third, different set. Do not recreate requirements.txt.
+dependencies = [
+    # ── FastAPI core ──────────────────────────────────────────────────────────
+    "fastapi>=0.115.5,<0.116",
+    "uvicorn[standard]>=0.32.0,<0.33",
+    # ── Database ──────────────────────────────────────────────────────────────
+    "sqlalchemy>=2.0.36,<2.1",
+    "asyncpg>=0.30.0,<0.31",
+    "alembic>=1.14.0,<2",
+    # SQLAlchemy's async layer needs it. asyncpg pulls it in implicitly,
+    # aiosqlite does not.
+    "greenlet>=3.0,<4",
+    # ── Settings ──────────────────────────────────────────────────────────────
+    "pydantic>=2.10.3,<3",
+    "pydantic-settings>=2.6.1,<3",
+    # ── Security ──────────────────────────────────────────────────────────────
+    # PyJWT, not python-jose: `import jwt` is what the code does, and
+    # python-jose has unpatched CVEs.
+    "pyjwt>=2.10.1,<3",
+    # bcrypt directly, not passlib: passlib 1.7.4 breaks against bcrypt >= 4.1.
+    "bcrypt>=4.2.1,<5",
+    "slowapi>=0.1.9,<0.2",
+    # Backs the rate limiter's shared storage. Without it slowapi silently
+    # falls back to per-worker in-memory counters.
+    "redis>=5.0,<7",
+    "email-validator>=2.2.0,<3",
+    # NOTE: no python-multipart. Nothing here declares Form()/File()/UploadFile,
+    # and FastAPI fails loudly ("Form data requires 'python-multipart'") the
+    # moment something does. Add it back with your first upload endpoint.
+]
 
-[tool.poetry.group.dev.dependencies]
-pytest = "^8.3.4"
-pytest-asyncio = "^0.24.0"
-aiosqlite = "^0.20.0"
-ruff = "^0.8.0"
-mypy = "^1.13.0"
-pre-commit = "^3.7.1"
+[dependency-groups]
+# Not installed into the production image — the Dockerfile syncs with --no-dev.
+dev = [
+    # The test client only. Nothing in app/ imports httpx — it was shipping
+    # in the production image for the sake of two comments.
+    "httpx>=0.28.0,<0.29",
+    "pytest>=8.3.4",
+    "pytest-asyncio>=0.24.0",
+    "pytest-cov>=6.0.0",
+    # The suite runs on in-memory SQLite; conftest imports this driver.
+    "aiosqlite>=0.20.0",
+    "ruff>=0.8.0",
+    "mypy>=1.13.0",
+    "pre-commit>=3.7.1",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["app"]
 
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
 
+[tool.coverage.run]
+source = ["app"]
+omit = ["*/__pycache__/*"]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "if TYPE_CHECKING:",
+    "raise NotImplementedError",
+    "\\.\\.\\.",
+]
+
+
 [tool.ruff]
 line-length = 100
 target-version = "py312"
+# Ruff formats Python code blocks inside Markdown. The docs' snippets are
+# illustrative and hand-wrapped for reading.
+extend-exclude = [
+    "*.md",
+    # A scaffold, not code in the tree: it imports app.modules.sample, which
+    # does not exist, so every import-sorting verdict on it is wrong.
+    "templates/",
+]
 
 [tool.ruff.lint]
-select = ["E", "F", "W", "I", "N", "UP"]
-ignore = ["E712", "N818"]
+# B (bugbear) and ASYNC matter to a codebase this async; S (bandit) matters to
+# any template that ships an auth module.
+select = ["E", "F", "W", "I", "N", "UP", "B", "ASYNC", "SIM", "C4", "RUF", "S"]
+ignore = [
+    "E712",   # explicit `== True` reads better in SQLAlchemy filters
+    "N818",   # project convention: exceptions are named ...Exception
+    "B008",   # Depends()/Query() in defaults is the FastAPI idiom
+    "RUF012", # ClassVar annotations on ModuleConfig would obscure the contract
+    "S101",   # asserts are the test suite's whole vocabulary
+    # str-Enum. RoleType's `.value` is written to a column and signed into the
+    # JWT; swapping the base class for StrEnum changes how it renders in
+    # f-strings and is not worth the risk on a frozen wire contract.
+    "UP042",
+]
+
+[tool.ruff.lint.per-file-ignores]
+# Alembic's generated migrations are not ours to restyle.
+"alembic/versions/*.py" = ["E501", "N999", "RUF", "W291", "UP", "I"]
+# Test fixtures legitimately hold hardcoded credentials and bind test hosts.
+"tests/*" = ["S105", "S106", "S311"]
+# S105 flags the *names* of token types and the placeholder-key constant these
+# files exist to define. They are identifiers and a known-bad sentinel, not
+# secrets — config.py rejects that very value outside development.
+"app/config.py" = ["S105"]
+"app/core/constants.py" = ["S105"]
+"app/modules/auth/schemas.py" = ["S105"]
 
 
-[build-system]
-requires = ["poetry-core"]
-build-backend = "poetry.core.masonry.api"
+[tool.mypy]
+python_version = "3.12"
+plugins = ["pydantic.mypy"]
+# Deliberately not --strict on day one: this produces a fixable list rather
+# than an ignorable one. Tighten once it is green.
+warn_redundant_casts = true
+warn_unused_ignores = true
+warn_unreachable = true
+no_implicit_optional = true
+check_untyped_defs = true
+ignore_missing_imports = true
+exclude = ["alembic/versions/"]
+
+[[tool.mypy.overrides]]
+module = "tests.*"
+disallow_untyped_defs = false
