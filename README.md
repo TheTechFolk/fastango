@@ -1,199 +1,134 @@
-# Fastango 🚀
+# Fastango
 
-Fastango is a Django-inspired modular project boilerplate built on top of FastAPI. It lets you build large, scalable FastAPI projects using pluggable mini-apps, similar to Django apps, with optional DRM, access control, and security-first design.
+A Django-inspired modular FastAPI template. Clone it, configure it, migrate,
+run, start building features.
 
-⚡ FastAPI speed · 🧩 Django-like apps · 🔐 Built-in security mindset
-
----
-
-## 🚀 Why Fastango?
-FastAPI is fast and modern, but as projects grow, managing routes, services, permissions, and business logic can become messy. Django solves this with its app-based architecture — Fastango brings that idea to FastAPI, without sacrificing performance or flexibility.
-
-Fastango is designed for:
-* Large FastAPI backends
-* Multi-tenant systems
-* DRM / protected APIs
-* Research & production-ready systems
-* Teams who love Django’s structure but need FastAPI’s speed
+Django's organizational win — self-contained apps you drop in a directory —
+without Django's machinery. FastAPI stays FastAPI: async, Pydantic-first,
+explicit dependency injection.
 
 ---
 
-## ✨ Key Features
-* 🧩 **Django-like Mini Apps**: Each feature lives in its own self-contained app.
-* 🔌 **Pluggable Architecture**: Enable/disable apps via `ENABLED_MODULES` / `DISABLED_MODULES` settings — no code changes.
-* 🔐 **DRM & Access Control Ready**: Built-in hooks for license checks, permissions, and policies.
-* ⚡ **FastAPI Native**: Fully compatible with FastAPI dependencies, routers, and async.
-* 🏗️ **Clean Project Structure**: Opinionated but flexible layout for long-term maintainability.
-* 🧪 **Test-Friendly**: Easy unit and integration testing per app.
+## Quickstart
+
+```bash
+git clone <this-repo> my-backend && cd my-backend
+make setup      # uv sync, copy local.env.example -> local.env, install hooks
+make up         # start postgres + redis
+make migrate    # alembic upgrade head
+make dev        # http://localhost:8000/docs
+```
+
+Then create your first module:
+
+```bash
+make module name=orders
+```
+
+Restart the server. It is mounted at `/private/api/v1/orders`. There is no
+registration step — no `INSTALLED_APPS`, no router imports to edit.
 
 ---
 
-## 🏗️ Project Structure
+## The idea in three rules
+
+**1. A feature is a directory.**
 
 ```
-fastango_v1/
-├── app/
-│   ├── main.py              # Application factory (with global request ContextVar hooks)
-│   ├── config.py            # Pydantic BaseSettings (loads local.env)
-│   ├── database.py          # Async SQLAlchemy engine + request-scoped session ContextVar helper
-│   ├── exceptions.py        # Centralized exception handlers registration
-│   ├── middleware.py        # Centralized middleware configurator (CORS & TrustedHost)
-│   └── core/
-│       ├── registry.py      # Module auto-discovery (router + model registration)
-│       ├── security.py      # JWT + bcrypt
-│       ├── responses.py     # Standard response envelope
-│       ├── exceptions.py    # Custom exception hierarchy
-│       ├── audit.py         # Async request audit logger
-│       └── storage.py       # AWS S3 service
-│   └── modules/             # Each module declares an apps.py ModuleConfig
-│       ├── common/          # Shared base models & enums (no router)
-│       ├── auth/            # Shared authentication (register & login)
-│       ├── home/            # General landing overview / dashboard
-│       └── profile/         # User profile management
-├── templates/
-│   └── module/              # Copyable skeleton for new modules (cp -r, no CLI)
-├── tests/
-│   ├── conftest.py          # Async pytest fixtures (in-memory DB)
-│   └── modules/             # Integration tests per module
-├── alembic/                 # Database migrations
-├── requirements.txt
-├── pyproject.toml
-├── docker-compose.yml
-└── local.env
+app/modules/orders/
+├── apps.py          # OrdersConfig — name, prefix, tags, routers
+├── models.py        # SQLAlchemy tables
+├── repositories.py  # queries; never commits
+├── schemas.py       # Pydantic in/out
+├── services.py      # business logic; owns transactions
+├── router.py        # endpoints, one line each
+└── constants.py     # module messages
 ```
 
----
+Drop it in `app/modules/`, it mounts. Delete the directory, it is gone.
 
-## 🚀 Quick Start
+**2. A route's URL states its auth requirement.**
 
-### 1. Install dependencies
-
-Create a virtual environment and install the required modules:
-
-```bash
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-```
-
-### 2. Install pre-commit hooks
-
-```bash
-pre-commit install
-```
-
-### 3. Start the database
-
-```bash
-docker-compose up postgres redis -d
-```
-
-### 4. Run migrations
-
-```bash
-alembic upgrade head
-```
-
-### 5. Run the server
-
-```bash
-uvicorn app.main:app --reload
-```
-
-Visit: http://localhost:8000/docs
-
----
-
-## 🐳 Docker (Full Stack)
-
-```bash
-docker-compose up --build
-```
-
----
-
-## 🧪 Running Tests
-
-Ensure test dependencies are installed and execute pytest:
-
-```bash
-pip install aiosqlite greenlet
-pytest -v
-```
-
----
-
-## 📐 Architecture Layers
-
-Each leaf module follows the same layered pattern:
-
-| Layer | File | Responsibility |
+| `apps.py` attribute | Mounts under | Token required |
 |---|---|---|
-| Module Config | `apps.py` | `ModuleConfig` declaring name, router, prefix, tags, module-wide dependencies, lifespan hooks |
-| Database Schema | `models.py` | SQLAlchemy ORM table definitions (optional) |
-| Query Layer | `repositories.py` | Async DB read/write operations (optional) |
-| Validation | `schemas.py` | Pydantic request/response shapes |
-| Business Logic | `services.py` | Use-cases, transactions, orchestration |
-| HTTP Controller | `router.py` | FastAPI endpoints — no prefix/tags (owned by `apps.py`) |
+| `router` | `/private/api/v1/...` | yes |
+| `public_router` | `/public/api/v1/...` | no |
 
-Modules are auto-discovered by [app/core/registry.py](app/core/registry.py): drop a folder with an `apps.py` and it mounts automatically. No central registry to edit.
+`router` is the default, so a module that thinks about none of this ships
+private. Enforced twice — a default-deny middleware on the `/public/` prefix,
+and a guard on the private router itself — so one mounting mistake is not an
+opening.
 
----
+**3. Nobody writes a status code.**
 
-## 🧩 Working with Modules
+Services raise `NotFoundException`, `ValidationException`, `ForbiddenException`.
+Each carries its own status, and one handler maps the whole family. Every
+response — success, 404, 422, 429, 503 — comes back in the same envelope:
 
-### Creating a New Module
-
-No CLI needed — copy the template and rename:
-
-```bash
-cp -r templates/module app/modules/orders
-grep -rl "sample\|Sample" app/modules/orders | xargs sed -i 's/sample/orders/g; s/Sample/Orders/g'
-rm app/modules/orders/README.md
-```
-
-Restart the server — the module mounts automatically at `/api/v1/orders`.
-
-### Enabling / Disabling Modules
-
-Control which modules mount via `local.env` (JSON lists):
-
-```bash
-ENABLED_MODULES=["auth","profile"]   # empty (default) = mount all
-DISABLED_MODULES=["home"]            # always wins over enabled
-```
-
-Disabled modules keep their models registered so Alembic migrations stay complete — disabled ≠ uninstalled, same as Django's `INSTALLED_APPS` semantics.
-
-### Module-level Dependencies
-
-Guard every route in a module from one place in its `apps.py`:
-
-```python
-from fastapi import Depends
-from app.core.security import get_current_user_code
-
-class OrdersConfig(ModuleConfig):
-    name = "orders"
-    router = router
-    prefix = "/orders"
-    tags = ["Orders"]
-    dependencies = [Depends(get_current_user_code)]  # applied to all routes
+```json
+{ "error": false, "message": "Login successful.", "data": { "...": "..." } }
 ```
 
 ---
 
-## 🔐 API Endpoints
+## What you get
 
-### 🔑 Authentication
-* `POST /api/v1/auth/register` — Register a new user account
-* `POST /api/v1/auth/login` — Authenticate credentials and get JWT token pair
+| | |
+|---|---|
+| **Auth** | register / login / refresh / me, JWT access+refresh, bcrypt off the event loop, timing-flat login, role guards |
+| **Security** | default-deny routing, hardcoded JWT algorithms, required claims, secret-key strength gate, CORS wildcard rejection, CSP/HSTS/COOP/CORP, trusted hosts, Redis-backed proxy-aware rate limiting |
+| **Database** | SQLAlchemy 2.0 async, explicit transactions, an uncommitted-write guard that fails loudly instead of losing data, Alembic wired to auto-discovered models |
+| **Observability** | `X-Request-ID` on every response and every log line, request timing, liveness + readiness probes |
+| **Testing** | in-memory SQLite with FK enforcement, real signed tokens (no auth bypass, ever), anon/user/admin clients |
+| **Tooling** | `uv`, ruff, mypy, pre-commit, a Makefile, 4-job CI including a migration-drift check |
+| **Deploy** | multi-stage non-root Docker image, healthcheck, `--proxy-headers` |
 
-### 🏠 Home
-* `GET  /api/v1/home` — Simple landing welcome data
+---
 
-### 👤 Profile
-* `GET  /api/v1/profile` — Fetch active authenticated user profile details
+## Layout
 
-### 🏥 Health
-* `GET  /health` — Returns application status and health checks
+```
+app/
+├── main.py          # factory, lifespan, health probes
+├── config.py        # validated settings
+├── database.py      # engine, session, write guard
+├── middleware.py    # request-id -> headers -> audit -> auth -> CORS -> host
+├── exceptions.py    # every error, one envelope
+├── logging_config.py
+├── core/            # infrastructure. NEVER imports app.modules.*
+└── modules/         # your features
+    ├── common/      # only what two or more modules share
+    └── auth/        # the reference module
+```
+
+**Where do I put this?** If it is a feature, `app/modules/<feature>/`. If two
+modules need it, `app/modules/common/`. If every project needs it, `app/core/`.
+If you are unsure, it is a feature.
+
+---
+
+## Commands
+
+`make help` lists them. The full reference with explanations is in
+[docs/COMMANDS.md](docs/COMMANDS.md); the architecture and its rules are in
+[docs/GUIDE.md](docs/GUIDE.md). Background on why the structure looks like this is in
+[docs/structure.md](docs/structure.md).
+
+---
+
+## Before you deploy
+
+- `SECRET_KEY` — `openssl rand -hex 32`. The app refuses to start outside
+  development with the placeholder or anything under 32 characters.
+- `ALLOWED_HOSTS` — your real hostnames.
+- `CORS_ORIGINS` — exact origins. `"*"` is rejected at startup because
+  credentials are enabled.
+- `REDIS_URL` — without it rate limits are per-worker, which means
+  `--workers 4` quietly multiplies every limit by four.
+- Run behind a proxy with `--proxy-headers` (the image already does), or the
+  rate limiter buckets the entire internet into one counter.
+- `/docs` is served in development only.
+
+## License
+
+MIT.

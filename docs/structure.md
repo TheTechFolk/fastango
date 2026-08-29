@@ -1,3 +1,9 @@
+> **Historical.** This is the original Django/DRF → FastAPI translation study
+> that the template grew out of, kept for the reasoning behind the module
+> layout. It predates the `/public` + `/private` route roots, the exception
+> pipeline, and the move to `uv`, so **treat [GUIDE.md](GUIDE.md) as the
+> current architecture** wherever the two disagree.
+
 # Fastango Architecture Blueprint: Bringing Django's Modular Structure to FastAPI
 
 > **Fastango** — *Bring Django’s structure to FastAPI, without slowing it down.*
