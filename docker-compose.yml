@@ -1,4 +1,5 @@
-version: "3.9"
+# No `version:` key — it has been obsolete since Compose v2 and only produces
+# a warning on every command.
 
 services:
   # ── FastAPI Application ────────────────────────────────────────────────────
@@ -6,29 +7,29 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: fastango_api
-    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    command: >
+      uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+      --proxy-headers --forwarded-allow-ips "*"
     volumes:
-      - .:/app
+      # Source only. Mounting the repo root would shadow /app/.venv with the
+      # host's, which is built for a different platform.
+      - ./app:/app/app
     ports:
       - "8000:8000"
     environment:
-      - DATABASE_URL=postgresql+asyncpg://postgres:postgres@postgres:5432/fastango_db
-      - REDIS_URL=redis://redis:6379/0
+      DATABASE_URL: postgresql+asyncpg://postgres:postgres@postgres:5432/fastango_db
+      REDIS_URL: redis://redis:6379/0
     env_file:
       - local.env
     depends_on:
       postgres:
         condition: service_healthy
       redis:
-        condition: service_started
-    networks:
-      - fastango_net
+        condition: service_healthy
 
-  # ── PostgreSQL Database ────────────────────────────────────────────────────
+  # ── PostgreSQL ─────────────────────────────────────────────────────────────
   postgres:
     image: postgres:16-alpine
-    container_name: fastango_postgres
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
@@ -36,30 +37,28 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     ports:
-      - "5432:5432"
+      # Bound to loopback. "5432:5432" publishes the database on every
+      # interface, which on a laptop on any shared network means the internet.
+      - "127.0.0.1:5432:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 5s
       timeout: 5s
       retries: 5
-    networks:
-      - fastango_net
 
-  # ── Redis Cache ────────────────────────────────────────────────────────────
+  # ── Redis ──────────────────────────────────────────────────────────────────
   redis:
     image: redis:7-alpine
-    container_name: fastango_redis
     ports:
-      - "6379:6379"
+      - "127.0.0.1:6379:6379"
     volumes:
       - redis_data:/data
-    networks:
-      - fastango_net
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
 
 volumes:
   postgres_data:
   redis_data:
-
-networks:
-  fastango_net:
-    driver: bridge

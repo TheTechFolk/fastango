@@ -1,7 +1,5 @@
 # .pre-commit-config.yaml
-# Fastango — Pre-commit Hooks Configuration
-# See https://pre-commit.com for more information
-# See https://pre-commit.com/hooks.html for more hooks
+# See https://pre-commit.com
 
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
@@ -11,13 +9,21 @@ repos:
       - id: end-of-file-fixer
       - id: check-yaml
       - id: check-added-large-files
+      - id: check-merge-conflict
+      # A committed .env is the mistake this template exists to stop repeating.
+      - id: detect-private-key
 
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    # Ruff version matches tool.poetry.group.dev.dependencies in pyproject.toml
+    # Keep in sync with the ruff pin in pyproject.toml [dependency-groups].
     rev: v0.8.0
     hooks:
-      # Run the linter
       - id: ruff
-        args: [ --fix ]
-      # Run the formatter
+        args: [--fix]
       - id: ruff-format
+
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.13.0
+    hooks:
+      - id: mypy
+        files: ^app/
+        additional_dependencies: [pydantic>=2.10.3, pydantic-settings>=2.6.1]

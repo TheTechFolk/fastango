@@ -59,8 +59,9 @@ coverage.xml
 .docker/
 
 # ── Alembic ───────────────────────────────────────────────────────────────────
-alembic/versions/*.py
-!alembic/versions/.gitkeep
+# Migrations ARE committed. A template that cannot build its own schema is not
+# a template. Only the local scratch DB is ignored.
+*.sqlite3
 
 # ── OS ────────────────────────────────────────────────────────────────────────
 .DS_Store
@@ -68,3 +69,8 @@ Thumbs.db
 
 # ── Claude ────────────────────────────────────────────────────────────────────
 .claude/
+
+# ── Working notes ─────────────────────────────────────────────────────────────
+# Planning and review docs. Kept on disk, out of the repo — they are scratch
+# for whoever is working, not part of the template someone clones.
+.note/
