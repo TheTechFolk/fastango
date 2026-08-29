@@ -1,0 +1,101 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  UV_FROZEN: "1"
+
+jobs:
+  lint:
+    name: Lint & types
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - run: uv sync --frozen
+      - name: ruff check
+        run: uv run ruff check .
+      - name: ruff format
+        run: uv run ruff format --check .
+      - name: mypy
+        run: uv run mypy app
+
+  test:
+    name: Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - run: uv sync --frozen
+      - name: pytest
+        run: uv run pytest -q --cov --cov-report=term-missing --cov-report=xml
+        env:
+          APP_ENV: test
+          SECRET_KEY: ci-secret-key-not-used-outside-continuous-integration
+          DATABASE_URL: "sqlite+aiosqlite:///:memory:"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage
+          path: coverage.xml
+
+  migrations:
+    name: Migrations match the models
+    runs-on: ubuntu-latest
+    # The one check the test suite structurally cannot make: it builds its
+    # schema with Base.metadata.create_all and never runs Alembic, so model
+    # drift is invisible to it. This applies the migrations to a real Postgres
+    # and asks Alembic whether anything is still outstanding.
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: fastango_db
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      APP_ENV: local
+      SECRET_KEY: ci-secret-key-not-used-outside-continuous-integration
+      DATABASE_URL: "postgresql+asyncpg://postgres:postgres@localhost:5432/fastango_db"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - run: uv sync --frozen
+      - name: alembic upgrade head
+        run: uv run alembic upgrade head
+      - name: alembic check (no undeclared model changes)
+        run: uv run alembic check
+      - name: alembic downgrade base (the down path works too)
+        run: uv run alembic downgrade base
+
+  docker:
+    name: Image builds
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: false
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
