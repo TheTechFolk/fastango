@@ -9,17 +9,35 @@ from sqlalchemy.ext.asyncio import (
     async_sessionmaker,
     create_async_engine,
 )
-from sqlalchemy.orm import Session, declarative_base
+from sqlalchemy.orm import DeclarativeBase, Session
 
 from app.config import settings
+
+
+def _engine_options() -> dict:
+    """Pool settings, where the driver has a pool to configure.
+
+    SQLite runs on StaticPool and rejects pool_size/max_overflow outright, so
+    passing them unconditionally makes this module unimportable under the URL
+    the tests use.
+    """
+    if settings.DATABASE_URL.startswith("sqlite"):
+        return {}
+    return {
+        "pool_size": settings.DB_POOL_SIZE,
+        "max_overflow": settings.DB_MAX_OVERFLOW,
+        # Recycle before a proxy or NAT idle-timeout closes a pooled connection
+        # underneath us — pre-ping alone turns that into a retry on every checkout.
+        "pool_recycle": settings.DB_POOL_RECYCLE_SECONDS,
+        "pool_pre_ping": True,
+    }
+
 
 # ── Async Engine ──────────────────────────────────────────────────────────────
 engine = create_async_engine(
     settings.DATABASE_URL,
     echo=settings.DB_ECHO,
-    pool_size=settings.DB_POOL_SIZE,
-    max_overflow=settings.DB_MAX_OVERFLOW,
-    pool_pre_ping=True,
+    **_engine_options(),
 )
 
 # ── Session Factory ───────────────────────────────────────────────────────────
@@ -30,21 +48,28 @@ async_session_factory = async_sessionmaker(
     autoflush=False,
 )
 
+
 # ── Declarative Base ──────────────────────────────────────────────────────────
-Base = declarative_base()
+class Base(DeclarativeBase):
+    """SQLAlchemy 2.0 declarative base, matching the Mapped/mapped_column models."""
+
 
 # ── Context Var & Session Helpers ─────────────────────────────────────────────
+# This is a service locator, and that is a deliberate trade: it keeps `db` out of
+# every service signature and every handler one line. The cost is that a service
+# cannot be called outside a request without priming this — see the
+# `request_session` fixture in tests/conftest.py. Do not replace it with an
+# optional `db` parameter; that reintroduces the nested-transaction bug the
+# write guard below exists to catch.
 db_session_ctx: ContextVar[AsyncSession] = ContextVar("db_session")
 
 
 def get_db_session() -> AsyncSession:
-    """
-    Retrieve the current request-scoped database session.
-    """
+    """Retrieve the current request-scoped database session."""
     try:
         return db_session_ctx.get()
-    except LookupError:
-        raise RuntimeError("No database session in the current context.")
+    except LookupError as exc:
+        raise RuntimeError("No database session in the current context.") from exc
 
 
 # ── Uncommitted-write guard ───────────────────────────────────────────────────
@@ -77,8 +102,7 @@ def _has_uncommitted_writes(session: AsyncSession) -> bool:
 
 # ── FastAPI Dependency ────────────────────────────────────────────────────────
 async def get_db() -> AsyncGenerator[AsyncSession, None]:
-    """
-    Yield a SQLAlchemy AsyncSession as a FastAPI dependency.
+    """Yield a SQLAlchemy AsyncSession as a FastAPI dependency.
 
     Transaction management is owned by services (`async with db.begin():`).
     On request end this dependency:
@@ -103,8 +127,11 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
 
 
 async def inject_db_session_context(db: AsyncSession = Depends(get_db)):
-    """
-    FastAPI dependency to bind the request-scoped database session.
+    """Bind the request-scoped database session.
+
+    Mounted on the API routers in core/registry.py, NOT on the FastAPI app — as
+    an app-level dependency it opened a pooled connection for every /health
+    liveness probe.
     """
     token = db_session_ctx.set(db)
     try:

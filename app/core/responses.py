@@ -1,56 +1,24 @@
 # app/core/responses.py
-from typing import Any, Generic, TypeVar
+from typing import Any
 
 from pydantic import BaseModel
 
-T = TypeVar("T")
+from app.core.constants import ERROR_MSG, SUCCESS_MSG
 
 
-class APIResponse(BaseModel, Generic[T]):
+class APIResponse[T](BaseModel):
     """Standard API response envelope used across all endpoints."""
 
     error: bool = False
-    message: str = "Request executed successfully"
+    message: str = SUCCESS_MSG
     data: T | None = None
 
 
-def success_response(
-    data: Any = None,
-    message: str = "Request executed successfully",
-) -> dict:
-    """
-    Build a standard success response dictionary.
-
-    Args:
-        data: The payload to return to the client.
-        message: A human-readable status message.
-
-    Returns:
-        A dictionary conforming to APIResponse schema.
-    """
-    return {
-        "error": False,
-        "message": message,
-        "data": data,
-    }
+def success_response(data: Any = None, message: str = SUCCESS_MSG) -> dict:
+    """Build a standard success response dictionary."""
+    return {"error": False, "message": message, "data": data}
 
 
-def error_response(
-    message: str = "An error occurred",
-    data: Any = None,
-) -> dict:
-    """
-    Build a standard error response dictionary.
-
-    Args:
-        message: A human-readable error description.
-        data: Optional error detail payload.
-
-    Returns:
-        A dictionary conforming to APIResponse schema.
-    """
-    return {
-        "error": True,
-        "message": message,
-        "data": data,
-    }
+def error_response(message: str = ERROR_MSG, data: Any = None) -> dict:
+    """Build a standard error response dictionary."""
+    return {"error": True, "message": message, "data": data}
