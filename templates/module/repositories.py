@@ -1,6 +1,6 @@
 # app/modules/sample/repositories.py
-# Async DB read/write operations. Keep queries here so services stay free of
-# ORM details and caching decorators can be applied later.
+# Async DB read/write operations. Never commits — services own transactions.
+# Delete this file if the module owns no tables.
 #
 # Example:
 #
