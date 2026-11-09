@@ -40,8 +40,8 @@ adds a `public_router`. The auth middleware gates on the `/public/` prefix alone
 | `constants.py` | Module messages; global fallbacks live in `app/core/constants.py` |
 | `dependencies.py` | Route guards, if the module has any (optional) |
 
-`models.py` and `repositories.py` are not scaffolded — `app/modules/auth` is the
-worked example of both.
+`models.py` and `repositories.py` are not scaffolded — `app/modules/note` is the
+worked example of both, with a paginated list and owner-scoped CRUD.
 
 This is a **floor, not a ceiling**. A module that grows an engine, a rules file
 or a `detectors/` package adds files inside itself — it does not get split.

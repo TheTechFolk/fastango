@@ -73,4 +73,4 @@ Thumbs.db
 # ── Working notes ─────────────────────────────────────────────────────────────
 # Planning and review docs. Kept on disk, out of the repo — they are scratch
 # for whoever is working, not part of the template someone clones.
-note/
+/.note/

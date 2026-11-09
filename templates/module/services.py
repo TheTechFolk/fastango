@@ -6,7 +6,7 @@ class SampleService:
     """Business logic for the sample module.
 
     Owns tables? Add models.py + repositories.py, and wrap writes in
-    `async with atomic(db):` (app.database) — app/modules/auth is the worked example.
+    `async with atomic(db):` (app.database) — app/modules/note is the worked example.
     """
 
     @staticmethod

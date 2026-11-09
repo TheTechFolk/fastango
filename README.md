@@ -29,6 +29,11 @@ make module name=orders
 Restart the server. It is mounted at `/private/api/v1/orders`. There is no
 registration step — no `INSTALLED_APPS`, no router imports to edit.
 
+`app/modules/note` is the worked example to copy from: a table, a repository,
+paginated list, and create / update / delete scoped to the caller. When you no
+longer need it: `rm -r app/modules/note tests/modules/note` and delete its
+migration, `alembic/versions/c3a91e7f2b64_note.py`.
+
 ---
 
 ## The idea in three rules
@@ -76,6 +81,7 @@ response — success, 404, 422, 429, 503 — comes back in the same envelope:
 
 | | |
 |---|---|
+| **Reference CRUD** | `app/modules/note` — list / get / create / update / delete with pagination and per-owner scoping. Copy its shape, then delete it |
 | **Auth** | register / login / refresh / logout / me, JWT access+refresh with single-use refresh tokens, bcrypt off the event loop, timing-flat login, role guards |
 | **Security** | default-deny routing, hardcoded JWT algorithms, required claims, secret-key strength gate, CORS wildcard rejection, CSP/HSTS/COOP/CORP, trusted hosts, Redis-backed proxy-aware rate limiting |
 | **Database** | SQLAlchemy 2.0 async, explicit transactions, an uncommitted-write guard that fails loudly instead of losing data, Alembic wired to auto-discovered models |
@@ -99,7 +105,8 @@ app/
 ├── core/            # infrastructure. NEVER imports app.modules.*
 └── modules/         # your features
     ├── common/      # only what two or more modules share
-    └── auth/        # the reference module
+    ├── auth/        # register / login / refresh / logout / me
+    └── note/        # the reference CRUD module — copy it, then delete it
 ```
 
 **Where do I put this?** If it is a feature, `app/modules/<feature>/`. If two

@@ -106,17 +106,22 @@ query API, and wrapping it produces worse typing and worse joins.
 
 ### `models.py` — tables
 
-Inherit `CommonFieldBase` for `created_at` / `updated_at` / `is_active`. Expose
-a `code: uuid.UUID` and never the sequential primary key.
+Inherit `TimeStampedBase` for `created_at` / `updated_at`, or `CommonFieldBase`
+to add `is_active`. Expose a `code: uuid.UUID` and never the sequential primary
+key.
 
 Cross-module foreign keys use the **string table name**:
 
 ```python
-owner_id: Mapped[int] = mapped_column(ForeignKey("auth.id", ondelete="CASCADE"))
+owner_code: Mapped[uuid.UUID] = mapped_column(ForeignKey("auth.code", ondelete="CASCADE"))
 ```
 
 SQLAlchemy resolves it lazily, so `orders` never imports `auth`'s model class
-and the two stay independently deletable.
+and the two stay independently deletable. Point at `auth.code`, not `auth.id`:
+the code is the access token's subject, so the owner is known without a lookup.
+
+`app/modules/note` is all four layers working together — a paginated list and
+create / update / delete, every query scoped to the caller.
 
 ---
 
