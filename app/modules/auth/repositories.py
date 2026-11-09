@@ -1,10 +1,11 @@
 # app/modules/auth/repositories.py
 import uuid
+from datetime import datetime
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.modules.auth.models import Auth
+from app.modules.auth.models import Auth, RevokedToken
 
 
 class AuthRepository:
@@ -29,3 +30,17 @@ class AuthRepository:
         await db.flush()
         await db.refresh(record)
         return record
+
+
+class RevokedTokenRepository:
+    """Revoked refresh-token ids. Never commits — services own transactions."""
+
+    @staticmethod
+    async def add(db: AsyncSession, jti: str, expires_at: datetime) -> None:
+        """Revoke `jti`. Raises IntegrityError if it was already revoked.
+
+        Insert-as-check, deliberately: a separate "is it revoked?" select would
+        let two concurrent requests both see "no" and both redeem the token.
+        """
+        db.add(RevokedToken(jti=jti, expires_at=expires_at))
+        await db.flush()

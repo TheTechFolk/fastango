@@ -102,9 +102,13 @@ def create_refresh_token(subject: str | uuid.UUID) -> str:
 
     Carries no `role` claim on purpose: roles can change between issue and
     refresh, so the value is re-read from the record rather than replayed.
+
+    `jti` is what logout and rotation revoke. Access tokens carry none: they
+    are never looked up, which keeps every private request free of I/O.
     """
     expire = datetime.now(UTC) + timedelta(days=settings.JWT_REFRESH_TOKEN_EXPIRE_DAYS)
     payload = {
+        "jti": uuid.uuid4().hex,
         "sub": str(subject),
         "exp": expire,
         "iat": datetime.now(UTC),

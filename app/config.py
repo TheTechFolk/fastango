@@ -84,7 +84,7 @@ class Settings(BaseSettings):
     # hardcoded constant in core/security.py — taking that list from config is
     # how "alg: none" gets accepted.
     JWT_ALGORITHM: Literal["HS256", "HS384", "HS512"] = "HS256"
-    JWT_ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
+    JWT_ACCESS_TOKEN_EXPIRE_MINUTES: int = 15
     JWT_REFRESH_TOKEN_EXPIRE_DAYS: int = 7
 
     # ── Rate Limiting ─────────────────────────────────────────────────────

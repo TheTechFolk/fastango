@@ -5,6 +5,7 @@ REGISTER_SUCCESS_MSG = "Account created successfully."
 LOGIN_SUCCESS_MSG = "Login successful."
 REFRESH_SUCCESS_MSG = "Token refreshed successfully."
 ME_SUCCESS_MSG = "Account details retrieved successfully."
+LOGOUT_SUCCESS_MSG = "Logged out successfully."
 
 # ── Error Messages ────────────────────────────────────────────────────────────
 # Generic credentials message — covers "user not found", "wrong password" and

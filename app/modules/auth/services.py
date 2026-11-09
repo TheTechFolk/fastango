@@ -1,5 +1,6 @@
 # app/modules/auth/services.py
 import uuid
+from datetime import UTC, datetime
 
 from sqlalchemy.exc import IntegrityError
 
@@ -12,12 +13,13 @@ from app.modules.auth.constants import (
     INVALID_CREDENTIALS_MSG,
     INVALID_REFRESH_MSG,
     LOGIN_SUCCESS_MSG,
+    LOGOUT_SUCCESS_MSG,
     ME_SUCCESS_MSG,
     REFRESH_SUCCESS_MSG,
     REGISTER_SUCCESS_MSG,
 )
 from app.modules.auth.models import Auth
-from app.modules.auth.repositories import AuthRepository
+from app.modules.auth.repositories import AuthRepository, RevokedTokenRepository
 from app.modules.auth.schemas import LoginSchema, MeOutSchema, RefreshSchema, RegisterSchema
 from app.modules.auth.utils import (
     ahash_password,
@@ -118,6 +120,28 @@ class AuthService:
         }
 
 
+def _decode_refresh(token: str) -> dict:
+    """Decode a refresh token and insist it is revocable.
+
+    Raises 401 on a bad signature, a missing claim, expiry, or an access token
+    presented in a refresh token's place. A token minted before `jti` existed
+    cannot be revoked, so it is refused rather than honored forever.
+    """
+    claims = decode_token(token, REFRESH_TOKEN_TYPE)
+    if not claims.get("jti"):
+        raise UnauthorizedException(INVALID_REFRESH_MSG)
+    return claims
+
+
+async def _revoke(claims: dict) -> None:
+    """Revoke a decoded refresh token. Raises IntegrityError if already revoked."""
+    await RevokedTokenRepository.add(
+        get_db_session(),
+        jti=str(claims["jti"]),
+        expires_at=datetime.fromtimestamp(claims["exp"], UTC),
+    )
+
+
 class TokenRefreshService:
     """Redeem a refresh token for a fresh pair.
 
@@ -134,26 +158,62 @@ class TokenRefreshService:
         self.payload = payload
 
     async def refresh(self) -> tuple[dict, str]:
-        # Raises 401 on a bad signature, a missing claim, expiry, or an access
-        # token presented in a refresh token's place.
-        claims = decode_token(self.payload.refresh_token, REFRESH_TOKEN_TYPE)
+        """Rotate: the presented token is revoked as the new pair is issued.
+
+        Without rotation logout would be hollow — every refresh hands out a new
+        token while the old one stays redeemable for its full 7 days, so
+        revoking the latest one would leave its predecessors working.
+        """
+        claims = _decode_refresh(self.payload.refresh_token)
 
         try:
             code = uuid.UUID(str(claims.get("sub")))
         except ValueError as exc:
             raise UnauthorizedException(INVALID_REFRESH_MSG) from exc
 
-        record = await AuthRepository.get_by_code(get_db_session(), code)
-        # A token can outlive the account it names. Deactivation is only checked
-        # at login, so this is the one place a disabled account stops renewing.
-        if record is None or not record.is_active:
-            raise UnauthorizedException(INVALID_REFRESH_MSG)
+        db = get_db_session()
+        try:
+            async with db.begin():
+                record = await AuthRepository.get_by_code(db, code)
+                # A token can outlive the account it names. Deactivation is only
+                # checked at login, so this is where a disabled account stops
+                # renewing.
+                if record is None or not record.is_active:
+                    raise UnauthorizedException(INVALID_REFRESH_MSG)
+                await _revoke(claims)
+        except IntegrityError:
+            # Already revoked: logged out, or already rotated. A reused
+            # refresh token is exactly what a stolen one looks like.
+            raise UnauthorizedException(INVALID_REFRESH_MSG) from None
 
         return {
             "access_token": create_access_token(subject=record.code, role=record.role),
             "refresh_token": create_refresh_token(subject=record.code),
             "token_type": "bearer",
         }, REFRESH_SUCCESS_MSG
+
+
+class LogoutService:
+    """Revoke a refresh token so it can never be redeemed again.
+
+    The access token is not touched: it is never looked up, so it lives out its
+    short lifetime. That keeps every private request I/O-free; the client
+    drops it on logout anyway.
+    """
+
+    def __init__(self, payload: RefreshSchema) -> None:
+        self.payload = payload
+
+    async def logout(self) -> tuple[None, str]:
+        claims = _decode_refresh(self.payload.refresh_token)
+        db = get_db_session()
+        try:
+            async with db.begin():
+                await _revoke(claims)
+        except IntegrityError:
+            # Logging out twice is still logged out.
+            pass
+        return None, LOGOUT_SUCCESS_MSG
 
 
 class AccountService:

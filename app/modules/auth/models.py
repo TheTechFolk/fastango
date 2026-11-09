@@ -1,11 +1,12 @@
 # app/modules/auth/models.py
 import uuid
+from datetime import datetime
 
-from sqlalchemy import String, Uuid
+from sqlalchemy import DateTime, String, Uuid
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.constants import RoleType
-from app.modules.common.models import CommonFieldBase
+from app.modules.common.models import CommonFieldBase, TimeStampedBase
 
 
 class Auth(CommonFieldBase):
@@ -36,3 +37,22 @@ class Auth(CommonFieldBase):
         default=RoleType.USER.value,
         server_default=RoleType.USER.value,
     )
+
+
+class RevokedToken(TimeStampedBase):
+    """A refresh token that can no longer be redeemed — by logout or rotation.
+
+    Only /refresh and /logout read this table, so revocation costs ordinary
+    requests nothing. The trade-off: an access token already issued stays valid
+    until it expires (JWT_ACCESS_TOKEN_EXPIRE_MINUTES), so keep that short.
+    """
+
+    __tablename__ = "revoked_token"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    # Unique, so inserting it is the check-and-revoke in one atomic step: two
+    # concurrent refreshes with one token cannot both succeed.
+    jti: Mapped[str] = mapped_column(String(64), nullable=False, unique=True, index=True)
+    # ponytail: rows past expires_at are dead weight; delete them on a schedule
+    # once the table grows (DELETE FROM revoked_token WHERE expires_at < now()).
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
