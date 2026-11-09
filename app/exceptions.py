@@ -24,6 +24,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from app.config import settings
 from app.core.constants import (
     ALREADY_EXISTS_MSG,
+    CONFLICT_MSG,
     ERROR_MSG,
     RATE_LIMITED_MSG,
     SERVICE_UNAVAILABLE_MSG,
@@ -45,6 +46,15 @@ def _field_errors(exc: RequestValidationError) -> dict[str, str]:
     return {
         ".".join(str(part) for part in err["loc"][1:]) or "body": err["msg"] for err in exc.errors()
     }
+
+
+def _is_unique_violation(exc: IntegrityError) -> bool:
+    """True for a duplicate key, as opposed to a foreign-key or NOT NULL failure.
+
+    Postgres says so with SQLSTATE 23505; SQLite only in the message text.
+    """
+    orig = exc.orig
+    return getattr(orig, "sqlstate", None) == "23505" or "UNIQUE constraint failed" in str(orig)
 
 
 def _envelope(
@@ -95,7 +105,10 @@ def configure_exceptions(app: FastAPI) -> None:
         catches it by hand becomes an opaque 500.
         """
         logger.warning("Integrity error on %s %s", request.method, request.url.path)
-        return _envelope(409, ALREADY_EXISTS_MSG)
+        # Only a duplicate key means "already exists". A foreign-key failure is
+        # the opposite — something referenced does not exist — so it gets the
+        # neutral message rather than a wrong one.
+        return _envelope(409, ALREADY_EXISTS_MSG if _is_unique_violation(exc) else CONFLICT_MSG)
 
     @app.exception_handler(OperationalError)
     async def operational_error_handler(request: Request, exc: OperationalError):

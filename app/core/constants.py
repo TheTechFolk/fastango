@@ -20,6 +20,7 @@ UNAUTHORIZED_MSG = "Authentication credentials were not provided or are invalid.
 FORBIDDEN_MSG = "You do not have permission to perform this action."
 NOT_FOUND_MSG = "Resource not found."
 ALREADY_EXISTS_MSG = "Resource already exists."
+CONFLICT_MSG = "The request conflicts with existing data."
 RATE_LIMITED_MSG = "Too many requests. Please slow down and try again shortly."
 SERVICE_UNAVAILABLE_MSG = "Service temporarily unavailable. Please try again shortly."
 
