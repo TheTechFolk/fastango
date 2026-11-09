@@ -1,5 +1,6 @@
 # app/database.py
-from collections.abc import AsyncGenerator
+from collections.abc import AsyncGenerator, AsyncIterator
+from contextlib import asynccontextmanager
 from contextvars import ContextVar
 
 from fastapi import Depends
@@ -70,9 +71,35 @@ def get_db_session() -> AsyncSession:
         raise RuntimeError("No database session in the current context.") from exc
 
 
+# ── Transactions ──────────────────────────────────────────────────────────────
+@asynccontextmanager
+async def atomic(db: AsyncSession) -> AsyncIterator[AsyncSession]:
+    """Commit on success, roll back on any error — like Django's transaction.atomic.
+
+    Use this, not `db.begin()`. A read autobegins the session's transaction, so
+    "load, check, then write" followed by `db.begin()` raises "A transaction is
+    already begun". Commit/rollback works either way, and the read and the
+    write land in one transaction.
+
+    Does not nest: an inner block would commit the outer one's work early, so a
+    nested call raises instead. Call it once per service method.
+    """
+    if db.info.get("in_atomic"):
+        raise RuntimeError("atomic() does not nest — open it once, in the outermost service.")
+    db.info["in_atomic"] = True
+    try:
+        yield db
+        await db.commit()
+    except BaseException:
+        await db.rollback()
+        raise
+    finally:
+        db.info.pop("in_atomic", None)
+
+
 # ── Uncommitted-write guard ───────────────────────────────────────────────────
 # Tracks whether the session has writes that need a commit. Without this guard,
-# a service that mutates the DB without `async with db.begin():` would silently
+# a service that mutates the DB without `async with atomic(db):` would silently
 # lose its work — the session closes, the open transaction rolls back, and the
 # request still returns 200. Better to fail loud.
 
@@ -102,7 +129,7 @@ def _has_uncommitted_writes(session: AsyncSession) -> bool:
 async def get_db() -> AsyncGenerator[AsyncSession, None]:
     """Yield a SQLAlchemy AsyncSession as a FastAPI dependency.
 
-    Transaction management is owned by services (`async with db.begin():`).
+    Transaction management is owned by services (`async with atomic(db):`).
     On request end this dependency:
       - rolls back on an unhandled exception, or
       - raises RuntimeError if writes are still pending — catches the bug
@@ -119,7 +146,7 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
                 await session.rollback()
                 raise RuntimeError(
                     "Uncommitted writes detected at request end. Wrap service "
-                    "mutations in `async with db.begin():` so the transaction "
+                    "mutations in `async with atomic(db):` so the transaction "
                     "boundary is explicit."
                 )
 

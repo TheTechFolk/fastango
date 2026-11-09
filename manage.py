@@ -22,6 +22,7 @@ from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.constants import RoleType
+from app.database import atomic
 from app.modules.auth.models import Auth
 from app.modules.auth.repositories import AuthRepository
 from app.modules.auth.schemas import RegisterSchema
@@ -46,7 +47,7 @@ async def create_superuser(db: AsyncSession, email: str, password: str) -> Auth:
         raise ValueError("; ".join(err["msg"] for err in exc.errors())) from None
 
     password_hash = await ahash_password(data.password)
-    async with db.begin():
+    async with atomic(db):
         if await AuthRepository.get_by_email(db, data.email):
             raise ValueError(f"An account with email {data.email} already exists.")
         record = Auth(email=data.email, password=password_hash, role=RoleType.ADMIN.value)
@@ -108,11 +109,16 @@ def _preload_shell() -> None:
     import_all_models()
     models = {m.class_.__name__: m.class_ for m in Base.registry.mappers}
     globals().update(
-        models, settings=settings, select=select, Session=async_session_factory, fetch=fetch
+        models,
+        settings=settings,
+        select=select,
+        Session=async_session_factory,
+        fetch=fetch,
+        atomic=atomic,
     )
-    print("Preloaded: settings, select, Session, fetch, " + ", ".join(sorted(models)))
+    print("Preloaded: settings, select, Session, fetch, atomic, " + ", ".join(sorted(models)))
     print("Read:  await fetch(select(Auth))")
-    print("Write: async with Session() as db, db.begin(): db.add(...)")
+    print("Write: async with Session() as db, atomic(db): db.add(...)")
 
 
 # ── migrations ────────────────────────────────────────────────────────────────

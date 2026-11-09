@@ -53,7 +53,8 @@ or a `detectors/` package adds files inside itself — it does not get split.
   `ValidationException` → 400), and one handler maps the whole family.
 - **`@api_response()` builds the envelope.** Handlers return `(data, message)`
   and stay one line. Skip it on endpoints returning a `Response` subclass.
-- **Writes own their transaction** — `async with db.begin():`. `get_db()` does
+- **Writes own their transaction** — `async with atomic(db):` from `app.database`
+  (not `db.begin()`, which fails after any read). `get_db()` does
   not auto-commit, and uncommitted writes raise at request end.
 - **Leaf modules do not import each other.** Cross-module foreign keys use the
   string table name.

@@ -6,7 +6,7 @@ from sqlalchemy.exc import IntegrityError
 from app.core.constants import REFRESH_TOKEN_TYPE, RoleType
 from app.core.exceptions import UnauthorizedException, ValidationException
 from app.core.security import decode_token
-from app.database import get_db_session
+from app.database import atomic, get_db_session
 from app.modules.auth.constants import (
     EMAIL_TAKEN_MSG,
     INVALID_CREDENTIALS_MSG,
@@ -44,7 +44,7 @@ class AuthService:
         data = self.data
 
         # Hashed before the transaction opens, not inside it. bcrypt is ~300ms
-        # of CPU; doing it under `db.begin()` holds a pooled connection and a
+        # of CPU; doing it under `atomic(db)` holds a pooled connection and a
         # row lock for that whole time, for no reason — the hash depends on
         # nothing the transaction reads.
         password_hash = await ahash_password(data.password)
@@ -52,7 +52,7 @@ class AuthService:
         try:
             # get_db() does not auto-commit, and uncommitted writes raise at
             # request end — the transaction boundary has to be explicit.
-            async with db.begin():
+            async with atomic(db):
                 if await AuthRepository.get_by_email(db, data.email):
                     raise ValidationException(EMAIL_TAKEN_MSG)
 
@@ -152,7 +152,7 @@ class TokenRefreshService:
 
         db = get_db_session()
         try:
-            async with db.begin():
+            async with atomic(db):
                 record = await AuthRepository.get_by_code(db, code)
                 # A token can outlive the account it names. Deactivation is only
                 # checked at login, so this is where a disabled account stops
@@ -183,7 +183,7 @@ class LogoutService:
         claims = _decode_refresh(self.payload.refresh_token)
         db = get_db_session()
         try:
-            async with db.begin():
+            async with atomic(db):
                 await RevokedTokenRepository.revoke(db, claims)
         except IntegrityError:
             # Logging out twice is still logged out.

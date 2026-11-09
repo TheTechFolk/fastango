@@ -83,12 +83,16 @@ Do **not** decorate endpoints returning a `Response` subclass (`FileResponse`,
 class OrderService:
     async def create(self, data: OrderCreateSchema) -> tuple[dict, str]:
         db = get_db_session()
-        async with db.begin():                       # writes own their boundary
+        async with atomic(db):                       # writes own their boundary
             if await OrderRepository.get_by_ref(db, data.ref):
                 raise ValidationException(ORDER_EXISTS_MSG)
             order = await OrderRepository.create(db, Order(**data.model_dump()))
         return {"code": order.code}, ORDER_CREATED_MSG
 ```
+
+`atomic` (from `app.database`) commits on success and rolls back on error. Use it
+rather than `db.begin()`, which raises once any read has started the transaction —
+and "load, check, then write" always reads first.
 
 Return `(data, message)` on success. **Raise** to fail — never return an error
 tuple. `get_db()` does not auto-commit, and a request that ends with pending
