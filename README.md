@@ -17,6 +17,7 @@ make setup      # uv sync, copy local.env.example -> local.env, install hooks
 make up         # start postgres + redis
 make migrate    # alembic upgrade head
 make dev        # http://localhost:8000/docs
+uv run python manage.py createsuperuser   # first ADMIN account
 ```
 
 Then create your first module:

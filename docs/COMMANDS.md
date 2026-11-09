@@ -67,6 +67,21 @@ Its models stay imported so migrations remain complete.
 
 ---
 
+## manage.py
+
+Django-style entry points. Thin wrappers — migrations are Alembic underneath,
+and `shell` is Python's own asyncio REPL.
+
+| Command | Description |
+| --- | --- |
+| `uv run python manage.py createsuperuser` | Create an ADMIN account (prompts; same password policy as `/register`) |
+| `SUPERUSER_PASSWORD=... uv run python manage.py createsuperuser --email a@b.co` | Non-interactive, for scripts and containers |
+| `uv run python manage.py shell` | Async REPL with `settings`, `select`, `Session`, `fetch` and every model loaded — `await fetch(select(Auth))` |
+| `uv run python manage.py makemigrations -m "add orders"` | Same as `make revision` |
+| `uv run python manage.py migrate [target]` | Same as `make migrate`; default target `head` |
+
+---
+
 ## Migrations
 
 | Command | Description |
@@ -107,6 +122,7 @@ schema is not a template.
 | `make logs` | Follow the API logs |
 | `docker compose exec api bash` | Shell into the API container |
 | `docker compose exec api alembic upgrade head` | Migrate inside the container |
+| `docker compose exec api python manage.py createsuperuser` | First admin, inside the container |
 | `docker compose down -v` | Stop and **delete the volumes** |
 
 ---

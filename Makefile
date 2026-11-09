@@ -8,7 +8,7 @@ help:     ; @grep -E '^[a-z]+:' Makefile | sed 's/:.*#/ —/' | sed 's/: ;.*//'
 setup:    ; uv sync && cp -n local.env.example local.env || true && uv run pre-commit install
 dev:      ; uv run uvicorn app.main:app --reload
 test:     ; uv run pytest -q
-lint:     ; uv run ruff check . && uv run ruff format --check . && uv run mypy app
+lint:     ; uv run ruff check . && uv run ruff format --check . && uv run mypy app manage.py
 fix:      ; uv run ruff check --fix . && uv run ruff format .
 migrate:  ; uv run alembic upgrade head
 revision: ; uv run alembic revision --autogenerate -m "$(m)"
