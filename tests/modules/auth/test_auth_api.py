@@ -80,6 +80,14 @@ async def test_short_password_rejected(anon_client):
 
 
 @pytest.mark.asyncio
+async def test_password_over_72_bytes_rejected(anon_client):
+    """40 characters, 80 bytes. bcrypt would hash only the first 72."""
+    resp = await anon_client.post(REGISTER, json={**CREDENTIALS, "password": "п" * 40})
+    assert resp.status_code == 422
+    assert "password" in resp.json()["data"]
+
+
+@pytest.mark.asyncio
 async def test_422_names_the_field_in_production(anon_client, monkeypatch):
     """A frontend has to know which field failed — not only in dev — and the
     submitted value must never be echoed back."""

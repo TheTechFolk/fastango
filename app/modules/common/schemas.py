@@ -13,7 +13,9 @@ A type earns a place here once a second module needs it.
 
 from typing import Annotated
 
-from pydantic import BeforeValidator, EmailStr, Field
+from pydantic import AfterValidator, BeforeValidator, EmailStr, Field
+
+BCRYPT_MAX_BYTES = 72
 
 
 def _normalize_email(value: str) -> str:
@@ -27,9 +29,22 @@ def _normalize_email(value: str) -> str:
 # an after-validator would only see values EmailStr had already accepted.
 EmailField = Annotated[EmailStr, BeforeValidator(_normalize_email)]
 
-# bcrypt silently truncates input past 72 bytes, so the cap belongs at the edge
-# rather than in the service.
-NewPasswordField = Annotated[str, Field(min_length=8, max_length=72)]
+
+def _within_bcrypt_limit(value: str) -> str:
+    """72 *bytes*, not characters: 40 Cyrillic letters are 80 bytes."""
+    if len(value.encode("utf-8")) > BCRYPT_MAX_BYTES:
+        raise ValueError(f"Password must be at most {BCRYPT_MAX_BYTES} bytes.")
+    return value
+
+
+# bcrypt 4 silently truncates input past 72 bytes and bcrypt 5 raises on it, so
+# the cap belongs at the edge rather than in the service. max_length alone
+# counts characters, which lets a multibyte password through.
+NewPasswordField = Annotated[
+    str,
+    Field(min_length=8, max_length=BCRYPT_MAX_BYTES),
+    AfterValidator(_within_bcrypt_limit),
+]
 
 # Deliberately looser than NewPasswordField. Enforcing the 8-char minimum on
 # login would answer a short guess with 422 instead of 401 — leaking the

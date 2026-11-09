@@ -43,9 +43,14 @@ def hash_password(plain_password: str) -> str:
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
-    """Verify a plain-text password against its bcrypt hash. Blocking."""
+    """Verify a plain-text password against its bcrypt hash. Blocking.
+
+    Truncated to 72 bytes by hand: that is what bcrypt 4 did silently when the
+    hash was made, and bcrypt 5 raises instead — which would lock out every
+    account whose longer password was accepted before the schema capped bytes.
+    """
     try:
-        return bcrypt.checkpw(plain_password.encode("utf-8"), hashed_password.encode("utf-8"))
+        return bcrypt.checkpw(plain_password.encode("utf-8")[:72], hashed_password.encode("utf-8"))
     except (ValueError, TypeError, AttributeError):
         # Malformed or missing hash → a failed verification, never a 500.
         return False
