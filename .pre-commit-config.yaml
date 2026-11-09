@@ -13,17 +13,28 @@ repos:
       # A committed .env is the mistake this template exists to stop repeating.
       - id: detect-private-key
 
-  - repo: https://github.com/astral-sh/ruff-pre-commit
-    # Keep in sync with the ruff pin in pyproject.toml [dependency-groups].
-    rev: v0.8.0
+  # ruff and mypy run from the project venv (`uv run`), so their versions come
+  # from uv.lock — the same ones `make lint` and CI use. Separately pinned hook
+  # repos drifted (ruff 0.8 here vs 0.16 in the lock) and disagreed on noqa.
+  # --force-exclude: pre-commit passes filenames explicitly, which would
+  # otherwise bypass extend-exclude (templates/ must stay unsorted).
+  - repo: local
     hooks:
       - id: ruff
-        args: [--fix]
+        name: ruff
+        entry: uv run ruff check --fix --force-exclude
+        language: system
+        types_or: [python, pyi]
       - id: ruff-format
-
-  - repo: https://github.com/pre-commit/mirrors-mypy
-    rev: v1.13.0
-    hooks:
+        name: ruff-format
+        entry: uv run ruff format --force-exclude
+        language: system
+        types_or: [python, pyi]
       - id: mypy
-        files: ^app/
-        additional_dependencies: [pydantic>=2.10.3, pydantic-settings>=2.6.1]
+        name: mypy
+        # Whole targets, not just the staged files: mypy needs the full
+        # import graph to judge a change.
+        entry: uv run mypy app manage.py
+        language: system
+        types: [python]
+        pass_filenames: false
