@@ -31,7 +31,6 @@ MANIFEST
 env/
 venv/
 ENV/
-.python-version
 
 # ── Environment / Secrets ──────────────────────────────────────────────────────
 local.env

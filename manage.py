@@ -83,11 +83,9 @@ def _createsuperuser(args: argparse.Namespace) -> None:
 # ── shell ─────────────────────────────────────────────────────────────────────
 def _shell(_: argparse.Namespace) -> None:
     """Python's asyncio REPL (top-level `await` works) with the app preloaded."""
-    if sys.version_info < (3, 13):
-        # 3.12's asyncio REPL ignores PYTHONSTARTUP, so it would open with
-        # nothing loaded. Fail loudly rather than hand over an empty shell.
-        sys.exit("manage.py shell needs Python 3.13+.")
-    env = {**os.environ, SHELL_FLAG: "1", "PYTHONSTARTUP": os.path.abspath(__file__)}  # type: ignore[unreachable]  # mypy targets 3.12
+    # Needs the 3.13 asyncio REPL: 3.12's ignores PYTHONSTARTUP and would open
+    # with nothing loaded. pyproject.toml requires 3.13 for exactly this.
+    env = {**os.environ, SHELL_FLAG: "1", "PYTHONSTARTUP": os.path.abspath(__file__)}
     sys.exit(subprocess.call([sys.executable, "-m", "asyncio"], env=env))
 
 

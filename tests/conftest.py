@@ -91,7 +91,7 @@ async def setup_database():
 
 
 @pytest_asyncio.fixture
-async def db_session() -> AsyncGenerator[AsyncSession, None]:
+async def db_session() -> AsyncGenerator[AsyncSession]:
     """Yield a test database session.
 
     Transaction management is service-owned (services use `async with
@@ -114,7 +114,7 @@ async def db_session() -> AsyncGenerator[AsyncSession, None]:
 
 
 @pytest_asyncio.fixture
-async def request_session(db_session: AsyncSession) -> AsyncGenerator[AsyncSession, None]:
+async def request_session(db_session: AsyncSession) -> AsyncGenerator[AsyncSession]:
     """Prime the request-scoped session ContextVar.
 
     Services resolve their session through `get_db_session()` rather than being
@@ -162,7 +162,7 @@ def auth_header(user_code: str = TEST_USER_CODE, role: str = RoleType.USER.value
 
 
 @pytest_asyncio.fixture
-async def anon_client(db_session: AsyncSession) -> AsyncGenerator[AsyncClient, None]:
+async def anon_client(db_session: AsyncSession) -> AsyncGenerator[AsyncClient]:
     """An unauthenticated client. Private routes answer 401 through this one."""
     app.dependency_overrides[get_db] = _override_get_db(db_session)
     async with AsyncClient(
@@ -174,7 +174,7 @@ async def anon_client(db_session: AsyncSession) -> AsyncGenerator[AsyncClient, N
 
 
 @pytest_asyncio.fixture
-async def client(db_session: AsyncSession) -> AsyncGenerator[AsyncClient, None]:
+async def client(db_session: AsyncSession) -> AsyncGenerator[AsyncClient]:
     """An HTTP client authenticated as a normal user.
 
     Authentication is real: every request carries a signed token that the auth
@@ -191,7 +191,7 @@ async def client(db_session: AsyncSession) -> AsyncGenerator[AsyncClient, None]:
 
 
 @pytest_asyncio.fixture
-async def admin_client(db_session: AsyncSession) -> AsyncGenerator[AsyncClient, None]:
+async def admin_client(db_session: AsyncSession) -> AsyncGenerator[AsyncClient]:
     """The same, speaking as an ADMIN."""
     app.dependency_overrides[get_db] = _override_get_db(db_session)
     async with AsyncClient(

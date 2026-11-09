@@ -5,7 +5,7 @@ description = "Fastango — a Django-inspired modular FastAPI template"
 authors = [{ name = "Fastango maintainers" }]
 readme = "README.md"
 license = { text = "MIT" }
-requires-python = ">=3.12"
+requires-python = ">=3.13"
 
 # One source of truth. This used to be a Poetry block that omitted `slowapi`
 # (imported at boot, so `poetry install` produced a non-importable app) while
@@ -87,7 +87,7 @@ exclude_lines = [
 
 [tool.ruff]
 line-length = 100
-target-version = "py312"
+target-version = "py313"
 # Ruff formats Python code blocks inside Markdown. The docs' snippets are
 # illustrative and hand-wrapped for reading.
 extend-exclude = [
@@ -129,7 +129,7 @@ ignore = [
 
 
 [tool.mypy]
-python_version = "3.12"
+python_version = "3.13"
 plugins = ["pydantic.mypy"]
 # Deliberately not --strict on day one: this produces a fixable list rather
 # than an ignorable one. Tighten once it is green.
