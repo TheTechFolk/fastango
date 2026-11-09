@@ -78,6 +78,14 @@ async def test_upstream_request_id_propagated(anon_client):
 
 
 @pytest.mark.asyncio
+async def test_upstream_uuid_request_id_propagated(anon_client):
+    """Proxies send UUIDs. Dropping them would break the trace at this hop."""
+    upstream = "3fa85f64-5717-4562-b3fc-2c963f66afa6"
+    resp = await anon_client.get("/health", headers={REQUEST_ID_HEADER: upstream})
+    assert resp.headers[REQUEST_ID_HEADER] == upstream
+
+
+@pytest.mark.asyncio
 async def test_malformed_upstream_request_id_replaced(anon_client):
     """It lands in logs — only accept something that looks like an id."""
     resp = await anon_client.get("/health", headers={REQUEST_ID_HEADER: "../../etc/passwd"})

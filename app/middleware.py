@@ -9,6 +9,7 @@ outermost wrapper. Request flow, outermost to innermost:
 """
 
 import logging
+import re
 import time
 
 from fastapi import FastAPI, HTTPException, Request
@@ -29,6 +30,11 @@ from app.core.responses import error_response
 from app.core.security import decode_token
 
 audit_logger = logging.getLogger("fastango.audit")
+
+# What an upstream X-Request-ID may look like. It lands in log lines, so only
+# plain id characters — but hyphens are in, or every UUID a proxy sends would
+# be thrown away and the trace would break at this hop.
+_REQUEST_ID_RE = re.compile(r"[A-Za-z0-9-]{1,64}")
 
 # Everything under here is reachable without a token. The trailing slash is
 # deliberate — a bare "/public" prefix would also exempt "/publicity".
@@ -124,7 +130,7 @@ def configure_middleware(app: FastAPI) -> None:
     async def request_id_middleware(request: Request, call_next):
         incoming = request.headers.get(REQUEST_ID_HEADER, "").strip()
         # Trust an upstream id only if it looks like one — it lands in logs.
-        request_id = incoming if incoming.isalnum() and len(incoming) <= 64 else new_request_id()
+        request_id = incoming if _REQUEST_ID_RE.fullmatch(incoming) else new_request_id()
         token = request_id_ctx.set(request_id)
         try:
             response = await call_next(request)
