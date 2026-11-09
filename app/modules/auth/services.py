@@ -1,6 +1,5 @@
 # app/modules/auth/services.py
 import uuid
-from datetime import UTC, datetime
 
 from sqlalchemy.exc import IntegrityError
 
@@ -33,14 +32,11 @@ from app.modules.auth.utils import (
 class AuthService:
     """Registration and login. Returns (data, message); raises on failure.
 
-    One instance is one request: the credentials come in through `__init__` and
-    the record either method resolves is put on `self`, so `_build_tokens()`
-    reads both rather than being handed either.
+    One instance is one request: the credentials come in through `__init__`.
     """
 
     def __init__(self, data: RegisterSchema | LoginSchema) -> None:
         self.data = data
-        self.record: Auth | None = None
 
     async def register(self) -> tuple[dict, str]:
         """Create an account and return a fresh token pair."""
@@ -60,7 +56,7 @@ class AuthService:
                 if await AuthRepository.get_by_email(db, data.email):
                     raise ValidationException(EMAIL_TAKEN_MSG)
 
-                self.record = Auth(
+                record = Auth(
                     email=data.email,
                     password=password_hash,
                     # Never read from the request body. This single line is the
@@ -68,7 +64,7 @@ class AuthService:
                     # escalation.
                     role=RoleType.USER.value,
                 )
-                await AuthRepository.create(db, self.record)
+                await AuthRepository.create(db, record)
         except IntegrityError:
             # The lookup above is not atomic: two concurrent signups for one
             # email both pass it and the second trips the unique constraint.
@@ -76,7 +72,7 @@ class AuthService:
             # 400 with the same generic message.
             raise ValidationException(EMAIL_TAKEN_MSG) from None
 
-        return self._build_tokens(), REGISTER_SUCCESS_MSG
+        return _token_pair(record), REGISTER_SUCCESS_MSG
 
     async def login(self) -> tuple[dict, str]:
         """Verify credentials and return a fresh token pair.
@@ -85,7 +81,7 @@ class AuthService:
         endpoint cannot be used to enumerate registered accounts:
 
         - An unknown email still pays for a bcrypt verification, against a dummy
-          hash. Short-circuiting on `not self.record` makes an unknown email
+          hash. Short-circuiting on `not record` makes an unknown email
           answer in ~2ms and a known one in ~300ms — the message is identical
           and the timing is not.
         - A disabled account answers with the credentials message rather than
@@ -93,31 +89,23 @@ class AuthService:
           that the account still exists.
         """
         db = get_db_session()
-        self.record = await AuthRepository.get_by_email(db, self.data.email)
+        record = await AuthRepository.get_by_email(db, self.data.email)
 
-        stored_hash = self.record.password if self.record else dummy_hash()
+        stored_hash = record.password if record else dummy_hash()
         password_ok = await averify_password(self.data.password, stored_hash)
 
-        if not self.record or not password_ok or not self.record.is_active:
+        if not record or not password_ok or not record.is_active:
             raise UnauthorizedException(INVALID_CREDENTIALS_MSG)
 
-        return self._build_tokens(), LOGIN_SUCCESS_MSG
+        return _token_pair(record), LOGIN_SUCCESS_MSG
 
-    def _build_tokens(self) -> dict:
-        """Access + refresh pair for the record this request resolved.
 
-        Reached only after register() created a record or login() verified one,
-        so `self.record` is set — asserted rather than assumed, because the
-        alternative is an AttributeError on None at token-minting time.
-        """
-        record = self.record
-        if record is None:
-            raise RuntimeError("_build_tokens() called before a record was resolved.")
-        return {
-            "access_token": create_access_token(subject=record.code, role=record.role),
-            "refresh_token": create_refresh_token(subject=record.code),
-            "token_type": "bearer",
-        }
+def _token_pair(record: Auth) -> dict:
+    """Access + refresh pair for `record`. token_type defaults in TokenOutSchema."""
+    return {
+        "access_token": create_access_token(subject=record.code, role=record.role),
+        "refresh_token": create_refresh_token(subject=record.code),
+    }
 
 
 def _decode_refresh(token: str) -> dict:
@@ -131,15 +119,6 @@ def _decode_refresh(token: str) -> dict:
     if not claims.get("jti"):
         raise UnauthorizedException(INVALID_REFRESH_MSG)
     return claims
-
-
-async def _revoke(claims: dict) -> None:
-    """Revoke a decoded refresh token. Raises IntegrityError if already revoked."""
-    await RevokedTokenRepository.add(
-        get_db_session(),
-        jti=str(claims["jti"]),
-        expires_at=datetime.fromtimestamp(claims["exp"], UTC),
-    )
 
 
 class TokenRefreshService:
@@ -180,17 +159,13 @@ class TokenRefreshService:
                 # renewing.
                 if record is None or not record.is_active:
                     raise UnauthorizedException(INVALID_REFRESH_MSG)
-                await _revoke(claims)
+                await RevokedTokenRepository.revoke(db, claims)
         except IntegrityError:
             # Already revoked: logged out, or already rotated. A reused
             # refresh token is exactly what a stolen one looks like.
             raise UnauthorizedException(INVALID_REFRESH_MSG) from None
 
-        return {
-            "access_token": create_access_token(subject=record.code, role=record.role),
-            "refresh_token": create_refresh_token(subject=record.code),
-            "token_type": "bearer",
-        }, REFRESH_SUCCESS_MSG
+        return _token_pair(record), REFRESH_SUCCESS_MSG
 
 
 class LogoutService:
@@ -209,7 +184,7 @@ class LogoutService:
         db = get_db_session()
         try:
             async with db.begin():
-                await _revoke(claims)
+                await RevokedTokenRepository.revoke(db, claims)
         except IntegrityError:
             # Logging out twice is still logged out.
             pass

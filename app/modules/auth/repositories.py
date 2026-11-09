@@ -1,6 +1,6 @@
 # app/modules/auth/repositories.py
 import uuid
-from datetime import datetime
+from datetime import UTC, datetime
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -36,11 +36,12 @@ class RevokedTokenRepository:
     """Revoked refresh-token ids. Never commits — services own transactions."""
 
     @staticmethod
-    async def add(db: AsyncSession, jti: str, expires_at: datetime) -> None:
-        """Revoke `jti`. Raises IntegrityError if it was already revoked.
+    async def revoke(db: AsyncSession, claims: dict) -> None:
+        """Revoke a decoded refresh token. Raises IntegrityError if already revoked.
 
         Insert-as-check, deliberately: a separate "is it revoked?" select would
         let two concurrent requests both see "no" and both redeem the token.
         """
-        db.add(RevokedToken(jti=jti, expires_at=expires_at))
+        expires_at = datetime.fromtimestamp(claims["exp"], UTC)
+        db.add(RevokedToken(jti=str(claims["jti"]), expires_at=expires_at))
         await db.flush()

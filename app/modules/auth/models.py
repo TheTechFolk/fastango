@@ -2,11 +2,12 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import DateTime, String, Uuid
+from sqlalchemy import DateTime, String, Uuid, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.constants import RoleType
-from app.modules.common.models import CommonFieldBase, TimeStampedBase
+from app.database import Base
+from app.modules.common.models import CommonFieldBase
 
 
 class Auth(CommonFieldBase):
@@ -39,7 +40,7 @@ class Auth(CommonFieldBase):
     )
 
 
-class RevokedToken(TimeStampedBase):
+class RevokedToken(Base):
     """A refresh token that can no longer be redeemed — by logout or rotation.
 
     Only /refresh and /logout read this table, so revocation costs ordinary
@@ -56,3 +57,7 @@ class RevokedToken(TimeStampedBase):
     # ponytail: rows past expires_at are dead weight; delete them on a schedule
     # once the table grows (DELETE FROM revoked_token WHERE expires_at < now()).
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    # Insert-only, so no updated_at: when it was revoked is all there is to know.
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
