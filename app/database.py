@@ -126,7 +126,7 @@ def _has_uncommitted_writes(session: AsyncSession) -> bool:
 
 
 # ── FastAPI Dependency ────────────────────────────────────────────────────────
-async def get_db() -> AsyncGenerator[AsyncSession, None]:
+async def get_db() -> AsyncGenerator[AsyncSession]:
     """Yield a SQLAlchemy AsyncSession as a FastAPI dependency.
 
     Transaction management is owned by services (`async with atomic(db):`).
