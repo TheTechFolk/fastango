@@ -74,6 +74,9 @@ testpaths = ["tests"]
 
 [tool.coverage.run]
 source = ["app"]
+# SQLAlchemy's async layer runs on greenlets. Without this, coverage loses
+# track after the first awaited query and reports tested lines as missed.
+concurrency = ["greenlet", "thread"]
 omit = ["*/__pycache__/*"]
 
 [tool.coverage.report]
