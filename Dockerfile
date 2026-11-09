@@ -52,11 +52,12 @@ EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
     CMD python -c "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=2).status == 200 else 1)"
 
-# --proxy-headers is what makes the rate-limiter key and the audit log record
-# the real client rather than the ingress. Without it every caller shares one
-# rate-limit bucket.
+# --proxy-headers makes the rate-limiter key and the audit log record the real
+# client rather than the ingress — but only from hops in FORWARDED_ALLOW_IPS.
+# Set it to your proxy's address or CIDR (e.g. 10.0.0.0/8). Never "*": then any
+# client can send its own X-Forwarded-For and dodge every rate limit.
+ENV FORWARDED_ALLOW_IPS=127.0.0.1
 CMD ["uvicorn", "app.main:app", \
      "--host", "0.0.0.0", \
      "--port", "8000", \
-     "--proxy-headers", \
-     "--forwarded-allow-ips", "*"]
+     "--proxy-headers"]

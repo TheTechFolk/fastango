@@ -125,8 +125,10 @@ If you are unsure, it is a feature.
   credentials are enabled.
 - `REDIS_URL` — without it rate limits are per-worker, which means
   `--workers 4` quietly multiplies every limit by four.
-- Run behind a proxy with `--proxy-headers` (the image already does), or the
-  rate limiter buckets the entire internet into one counter.
+- `FORWARDED_ALLOW_IPS` — your proxy's address or CIDR (the image defaults to
+  `127.0.0.1`). The image runs `--proxy-headers`, which takes the client address
+  from `X-Forwarded-For` only for these hops. Too narrow and every caller shares
+  one rate-limit counter; `"*"` lets any client forge the header and bypass it.
 - `/docs` is served in development only.
 - `SENTRY_DSN` — optional. Empty keeps Sentry off; set it to report errors.
   `SENTRY_TRACES_SAMPLE_RATE` (default `0.1`) controls performance tracing.

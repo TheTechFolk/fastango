@@ -5,8 +5,10 @@ Per-IP rate limiter built on slowapi. Mitigates credential stuffing on
 
 Two things here are load-bearing and are wrong by default:
 
-- The key. slowapi's `get_remote_address` sees only the proxy behind an
-  ingress; `client_ip` reads the forwarded chain (see why in core/context.py).
+- The key. Behind an ingress the socket address is the proxy for everyone;
+  uvicorn's --proxy-headers fixes that for trusted hops only (FORWARDED_ALLOW_IPS,
+  see core/context.py). Trusting X-Forwarded-For directly lets a client
+  rotate it for unlimited attempts.
 - The storage. In-memory means per-worker, so `--workers 4` quietly multiplies
   every limit by four.
 """
