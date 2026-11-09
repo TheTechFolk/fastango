@@ -29,7 +29,6 @@ from app.core.constants import (
     SERVICE_UNAVAILABLE_MSG,
     VALIDATION_ERROR_MSG,
 )
-from app.core.context import get_request_id
 from app.core.exceptions import AppException
 from app.core.responses import error_response
 
@@ -45,14 +44,13 @@ def _field_errors(exc: RequestValidationError) -> dict[str, str] | None:
     }
 
 
-def _envelope(status_code: int, message: str, **kwargs) -> JSONResponse:
+def _envelope(
+    status_code: int, message: str, headers: dict[str, str] | None = None, **kwargs
+) -> JSONResponse:
     """One envelope builder, so every handler emits the same shape.
 
-    The request id goes out as a header rather than in the body: it is
-    diagnostic metadata, not part of the response contract.
+    X-Request-ID is added by request_id_middleware on the way out.
     """
-    headers = kwargs.pop("headers", None) or {}
-    headers.setdefault("X-Request-ID", get_request_id())
     return JSONResponse(
         status_code=status_code,
         content=error_response(message=message, **kwargs),
@@ -93,34 +91,19 @@ def configure_exceptions(app: FastAPI) -> None:
         Without this every unique/FK violation outside the one place that
         catches it by hand becomes an opaque 500.
         """
-        logger.warning(
-            "Integrity error on %s %s [request_id=%s]",
-            request.method,
-            request.url.path,
-            get_request_id(),
-        )
+        logger.warning("Integrity error on %s %s", request.method, request.url.path)
         return _envelope(409, ALREADY_EXISTS_MSG)
 
     @app.exception_handler(OperationalError)
     async def operational_error_handler(request: Request, exc: OperationalError):
         """The database is unreachable or timed out — 503, not 500."""
-        logger.error(
-            "Database unavailable on %s %s [request_id=%s]",
-            request.method,
-            request.url.path,
-            get_request_id(),
-        )
+        logger.error("Database unavailable on %s %s", request.method, request.url.path)
         return _envelope(503, SERVICE_UNAVAILABLE_MSG, headers={"Retry-After": "5"})
 
     @app.exception_handler(SQLAlchemyError)
     async def sqlalchemy_error_handler(request: Request, exc: SQLAlchemyError):
         """Anything else from the driver layer, still in the envelope."""
-        logger.exception(
-            "Database error on %s %s [request_id=%s]",
-            request.method,
-            request.url.path,
-            get_request_id(),
-        )
+        logger.exception("Database error on %s %s", request.method, request.url.path)
         message = f"{ERROR_MSG} ({exc})" if settings.is_dev else ERROR_MSG
         return _envelope(500, message)
 
@@ -133,11 +116,6 @@ def configure_exceptions(app: FastAPI) -> None:
     @app.exception_handler(Exception)
     async def global_exception_handler(request: Request, exc: Exception):
         """Catch-all for genuinely unexpected failures. Registered last."""
-        logger.exception(
-            "Unhandled exception on %s %s [request_id=%s]",
-            request.method,
-            request.url.path,
-            get_request_id(),
-        )
+        logger.exception("Unhandled exception on %s %s", request.method, request.url.path)
         message = f"{ERROR_MSG} ({exc})" if settings.is_dev else ERROR_MSG
         return _envelope(500, message)

@@ -73,15 +73,13 @@ configure_sentry()
 
 # The docs publish every private route, schema and field name. Anonymous in
 # production is a free map of the attack surface, so they exist in dev only.
-_docs_enabled = settings.is_dev
-
 app = FastAPI(
     title=settings.APP_NAME,
     version=settings.APP_VERSION,
     description="Fastango — a Django-inspired modular FastAPI template.",
-    docs_url="/docs" if _docs_enabled else None,
-    redoc_url="/redoc" if _docs_enabled else None,
-    openapi_url="/openapi.json" if _docs_enabled else None,
+    docs_url="/docs" if settings.is_dev else None,
+    redoc_url="/redoc" if settings.is_dev else None,
+    openapi_url="/openapi.json" if settings.is_dev else None,
     lifespan=lifespan,
 )
 

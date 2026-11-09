@@ -1,5 +1,4 @@
 # app/config.py
-from functools import lru_cache
 from pathlib import Path
 from typing import Literal
 
@@ -9,9 +8,8 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 # Environment names, in one place. Several files used to keep their own tuple
 # and they drift apart — the auth path treating "local" as production while the
 # error path treats it as dev is how a bypass ships.
-Environment = Literal["local", "test", "testing", "staging", "production"]
-DEV_ENVS: tuple[Environment, ...] = ("local", "test", "testing")
-TEST_ENVS: tuple[Environment, ...] = ("test", "testing")
+Environment = Literal["local", "test", "staging", "production"]
+DEV_ENVS: tuple[Environment, ...] = ("local", "test")
 
 # Anchored to the package, not the process. A relative env_file resolves against
 # the working directory, so running uvicorn from anywhere but the repo root
@@ -153,7 +151,7 @@ class Settings(BaseSettings):
         Added for test environments only. It used to sit in the production
         default, where TrustedHostMiddleware would accept it from anyone.
         """
-        if self.APP_ENV in TEST_ENVS and "testserver" not in self.ALLOWED_HOSTS:
+        if self.APP_ENV == "test" and "testserver" not in self.ALLOWED_HOSTS:
             self.ALLOWED_HOSTS = [*self.ALLOWED_HOSTS, "testserver"]
         return self
 
@@ -164,10 +162,4 @@ class Settings(BaseSettings):
         return self.APP_ENV in DEV_ENVS
 
 
-@lru_cache(maxsize=1)
-def get_settings() -> Settings:
-    """Return a cached singleton of Settings."""
-    return Settings()
-
-
-settings: Settings = get_settings()
+settings = Settings()

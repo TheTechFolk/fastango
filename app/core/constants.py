@@ -33,13 +33,8 @@ REFRESH_TOKEN_TYPE = "refresh"
 class RoleType(str, Enum):
     """Account roles.
 
-    Lives in core, not in a module, for the same reason the token-type claims
-    do: core/security.py reads the role off every request, and core importing
-    from app.modules would invert the dependency the module registry rests on —
-    delete the auth module and the whole app would stop booting.
-
-    The role is signed into the JWT, so a demotion takes effect no sooner than
-    the token expires. Fine for coarse gating, not for revocation.
+    In core for the same reason as the token types above: core/security.py
+    reads it on every request. See require_role for what signing it implies.
     """
 
     USER = "USER"

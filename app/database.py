@@ -26,8 +26,6 @@ def _engine_options() -> dict:
     return {
         "pool_size": settings.DB_POOL_SIZE,
         "max_overflow": settings.DB_MAX_OVERFLOW,
-        # Recycle before a proxy or NAT idle-timeout closes a pooled connection
-        # underneath us — pre-ping alone turns that into a retry on every checkout.
         "pool_recycle": settings.DB_POOL_RECYCLE_SECONDS,
         "pool_pre_ping": True,
     }
@@ -129,9 +127,8 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
 async def inject_db_session_context(db: AsyncSession = Depends(get_db)):
     """Bind the request-scoped database session.
 
-    Mounted on the API routers in core/registry.py, NOT on the FastAPI app — as
-    an app-level dependency it opened a pooled connection for every /health
-    liveness probe.
+    Mounted on the API routers in core/registry.py, NOT on the FastAPI app —
+    see the note in discover_modules().
     """
     token = db_session_ctx.set(db)
     try:
