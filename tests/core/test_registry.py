@@ -74,7 +74,7 @@ def test_auth_mounts_under_both_roots(monkeypatch):
     app = FastAPI()
     discover_modules(app)
 
-    paths = {route.path for route in app.routes}
+    paths = set(app.openapi()["paths"])
     assert f"{PUBLIC_ROOT}/auth/login" in paths
     assert f"{PUBLIC_ROOT}/auth/register" in paths
     assert f"{PUBLIC_ROOT}/auth/refresh" in paths
@@ -88,7 +88,7 @@ def test_disabled_module_not_mounted(monkeypatch):
     app = FastAPI()
     discover_modules(app)
 
-    paths = {route.path for route in app.routes}
+    paths = set(app.openapi()["paths"])
     assert f"{PUBLIC_ROOT}/auth/login" not in paths
 
 

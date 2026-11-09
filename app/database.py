@@ -151,8 +151,16 @@ async def get_db() -> AsyncGenerator[AsyncSession]:
                 )
 
 
-async def inject_db_session_context(db: AsyncSession = Depends(get_db)):
+async def inject_db_session_context(
+    db: AsyncSession = Depends(get_db, scope="function"),
+):
     """Bind the request-scoped database session.
+
+    scope="function" is load-bearing. From FastAPI 0.118 a dependency's code
+    after `yield` runs once the response has already been sent, so the write
+    guard in get_db() would raise into the void: the client gets its 200 and
+    the write is rolled back unseen. Function scope runs it before the response
+    — tests/core/test_write_guard.py fails if this is ever dropped.
 
     Mounted on the API routers in core/registry.py, NOT on the FastAPI app —
     see the note in discover_modules().
@@ -162,3 +170,9 @@ async def inject_db_session_context(db: AsyncSession = Depends(get_db)):
         yield
     finally:
         db_session_ctx.reset(token)
+
+
+# Use this, never a bare Depends(inject_db_session_context): FastAPI refuses a
+# request-scoped dependency on top of a function-scoped one, and a request-
+# scoped get_db is the silent-data-loss case described above.
+DbSessionContext = Depends(inject_db_session_context, scope="function")
