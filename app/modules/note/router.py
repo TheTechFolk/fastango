@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, status
 
 from app.core.decorators import api_response
 from app.core.pagination import PageParams, page_params
-from app.core.responses import APIResponse
+from app.core.responses import APIResponse, error_responses
 from app.core.security import get_current_user_code
 from app.modules.note.schemas import (
     NoteCreateSchema,
@@ -39,14 +39,14 @@ async def create_note(
     return await NoteService(user_code).create(payload)
 
 
-@router.get("/{code}", response_model=NoteResponse)
+@router.get("/{code}", response_model=NoteResponse, responses=error_responses(404))
 @api_response()
 async def get_note(code: uuid.UUID, user_code: uuid.UUID = Depends(get_current_user_code)):
     """One of the caller's notes."""
     return await NoteService(user_code).get(code)
 
 
-@router.patch("/{code}", response_model=NoteResponse)
+@router.patch("/{code}", response_model=NoteResponse, responses=error_responses(404))
 @api_response()
 async def update_note(
     code: uuid.UUID,
@@ -57,7 +57,7 @@ async def update_note(
     return await NoteService(user_code).update(code, payload)
 
 
-@router.delete("/{code}", response_model=APIResponse[None])
+@router.delete("/{code}", response_model=APIResponse[None], responses=error_responses(404))
 @api_response()
 async def delete_note(code: uuid.UUID, user_code: uuid.UUID = Depends(get_current_user_code)):
     """Delete one of the caller's notes."""

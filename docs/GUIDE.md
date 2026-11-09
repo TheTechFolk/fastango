@@ -146,6 +146,13 @@ Exception detail reaches the client in development only. Every error response
 carries `X-Request-ID`, which is also on every log line — that is how a user's
 bug report gets matched to a stack trace.
 
+The OpenAPI schema documents the same envelope. The two root routers declare
+401 and 422 for every route; a route that can fail another way says so:
+
+```python
+@router.get("/{code}", response_model=NoteResponse, responses=error_responses(404))
+```
+
 > **Do not use `AlreadyExistsException` for registration.** A 409 confirms the
 > email is taken, which is exactly what the generic message exists to hide.
 

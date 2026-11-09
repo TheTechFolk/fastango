@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, Request, status
 from app.config import settings
 from app.core.decorators import api_response
 from app.core.rate_limit import limiter
-from app.core.responses import APIResponse
+from app.core.responses import APIResponse, error_responses
 from app.core.security import get_current_user_code
 from app.modules.auth.dependencies import registration_enabled
 from app.modules.auth.schemas import (
@@ -32,6 +32,7 @@ private_router = APIRouter()
     response_model=TokenResponse,
     status_code=status.HTTP_201_CREATED,
     dependencies=[Depends(registration_enabled)],
+    responses=error_responses(400, 403, 429),
 )
 @limiter.limit(settings.RATE_LIMIT_REGISTER)
 @api_response()
@@ -40,7 +41,7 @@ async def register(request: Request, payload: RegisterSchema):
     return await AuthService(payload).register()
 
 
-@public_router.post("/login", response_model=TokenResponse)
+@public_router.post("/login", response_model=TokenResponse, responses=error_responses(401, 429))
 @limiter.limit(settings.RATE_LIMIT_LOGIN)
 @api_response()
 async def login(request: Request, payload: LoginSchema):
@@ -48,7 +49,7 @@ async def login(request: Request, payload: LoginSchema):
     return await AuthService(payload).login()
 
 
-@public_router.post("/refresh", response_model=TokenResponse)
+@public_router.post("/refresh", response_model=TokenResponse, responses=error_responses(401, 429))
 @limiter.limit(settings.RATE_LIMIT_LOGIN)
 @api_response()
 async def refresh(request: Request, payload: RefreshSchema):
@@ -61,7 +62,9 @@ async def refresh(request: Request, payload: RefreshSchema):
     return await TokenRefreshService(payload).refresh()
 
 
-@public_router.post("/logout", response_model=APIResponse[None])
+@public_router.post(
+    "/logout", response_model=APIResponse[None], responses=error_responses(401, 429)
+)
 @limiter.limit(settings.RATE_LIMIT_LOGIN)
 @api_response()
 async def logout(request: Request, payload: RefreshSchema):

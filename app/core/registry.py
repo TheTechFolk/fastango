@@ -29,6 +29,7 @@ from collections.abc import Iterator
 from fastapi import APIRouter, Depends, FastAPI
 
 from app.config import settings
+from app.core.responses import error_responses
 from app.core.security import bearer_scheme, get_current_user_code
 from app.database import inject_db_session_context
 
@@ -155,10 +156,15 @@ def discover_modules(app: FastAPI) -> list[ModuleConfig]:
             Depends(bearer_scheme),
             Depends(get_current_user_code),
         ],
+        # Documented once here for every route. Declaring 422 also stops
+        # FastAPI from advertising its own {"detail": [...]} shape, which the
+        # handlers in app/exceptions.py never emit.
+        responses=error_responses(401, 422),
     )
     public_router = APIRouter(
         prefix=PUBLIC_ROOT,
         dependencies=[Depends(inject_db_session_context)],
+        responses=error_responses(422),
     )
     configs: list[ModuleConfig] = []
 
