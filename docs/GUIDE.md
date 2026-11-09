@@ -239,10 +239,10 @@ it, it is a recipe, not code.
 | Caching | `redis.asyncio` client in lifespan; a decorator on repository methods. |
 | S3 / file storage | `aioboto3`, or presigned URLs so bytes never touch the API. Not `boto3` — it is sync and blocks the loop. |
 | Email | An optional module with a lifespan-managed client. |
-| Token revocation | A Redis `jti` denylist checked in `decode_token`. |
+| Instant access-token revocation | Refresh tokens are already revoked on logout and rotation. To kill a live access token too, add a Redis `jti` denylist checked in `decode_token` — one Redis call per private request. |
+| Password change / reset, email verification | Endpoints in `modules/auth`; reset and verification need the email recipe first. `is_active` exists, an `is_verified` column does not yet. |
 | JSON logs | Swap the formatter in `logging_config.py`. |
 | Metrics | `prometheus-fastapi-instrumentator`, mounted in `main.py`. |
-| Error tracking | `sentry-sdk` init in lifespan. |
 
 ---
 

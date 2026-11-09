@@ -112,8 +112,7 @@ If you are unsure, it is a feature.
 
 `make help` lists them. The full reference with explanations is in
 [docs/COMMANDS.md](docs/COMMANDS.md); the architecture and its rules are in
-[docs/GUIDE.md](docs/GUIDE.md). Background on why the structure looks like this is in
-[docs/structure.md](docs/structure.md).
+[docs/GUIDE.md](docs/GUIDE.md).
 
 ---
 
