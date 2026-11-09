@@ -6,5 +6,3 @@ class SampleOutSchema(BaseModel):
     """Response shape for the sample endpoint."""
 
     message: str
-
-    model_config = {"from_attributes": True}
