@@ -1,7 +1,11 @@
 # tests/conftest.py
 """
 Shared pytest fixtures for the Fastango test suite.
-Uses an in-memory SQLite database (via aiosqlite) for fast, isolated tests.
+
+Runs on in-memory SQLite by default — fast, and needs nothing installed. Set
+TEST_DATABASE_URL to run the same suite on Postgres, which is what CI does:
+
+    TEST_DATABASE_URL=postgresql+asyncpg://postgres:postgres@localhost:5432/fastango_test pytest
 """
 
 # IMPORTANT: env vars are set BEFORE any app import so pydantic-settings picks
@@ -17,7 +21,11 @@ os.environ.setdefault("RATE_LIMIT_ENABLED", "false")
 # In-memory limiter storage: the suite must not need a Redis to run.
 os.environ.setdefault("REDIS_URL", "")
 os.environ.setdefault("SECRET_KEY", "test-secret-key-not-used-outside-the-test-suite")
-os.environ.setdefault("DATABASE_URL", "sqlite+aiosqlite:///:memory:")
+# TEST_DATABASE_URL, deliberately not DATABASE_URL: every test drops all the
+# tables, and a DATABASE_URL exported in a developer's shell is their dev
+# database. Pointing the suite at a real server has to be an explicit act.
+os.environ.setdefault("TEST_DATABASE_URL", "sqlite+aiosqlite:///:memory:")
+os.environ["DATABASE_URL"] = os.environ["TEST_DATABASE_URL"]
 
 
 import uuid
@@ -27,16 +35,23 @@ import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import event
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.pool import NullPool
 
 from app.core.constants import RoleType
 from app.database import Base, _has_uncommitted_writes, db_session_ctx, get_db
 from app.main import app
 from app.modules.auth.utils import create_access_token
 
-# ── In-Memory Test Database ───────────────────────────────────────────────────
-TEST_DATABASE_URL = "sqlite+aiosqlite:///:memory:"
+# ── Test Database ─────────────────────────────────────────────────────────────
+TEST_DATABASE_URL = os.environ["TEST_DATABASE_URL"]
+_IS_SQLITE = TEST_DATABASE_URL.startswith("sqlite")
 
-test_engine = create_async_engine(TEST_DATABASE_URL, echo=False)
+# No pooling off SQLite: each test runs on its own event loop, and a pooled
+# asyncpg connection cannot be reused from a different loop. In-memory SQLite
+# keeps its default single connection — a second one would be an empty database.
+test_engine = create_async_engine(
+    TEST_DATABASE_URL, **({} if _IS_SQLITE else {"poolclass": NullPool})
+)
 TestSessionFactory = async_sessionmaker(
     bind=test_engine,
     class_=AsyncSession,
@@ -49,7 +64,6 @@ TEST_USER_CODE = str(uuid.UUID("3fa85f64-5717-4562-b3fc-2c963f66afa6"))
 TEST_ADMIN_CODE = str(uuid.UUID("6b1f2c98-7d43-4a5e-9c21-0f8ab3d5e7c4"))
 
 
-@event.listens_for(test_engine.sync_engine, "connect")
 def _enforce_sqlite_foreign_keys(dbapi_connection, _record):
     """Turn on FK enforcement, which SQLite leaves off by default.
 
@@ -60,6 +74,10 @@ def _enforce_sqlite_foreign_keys(dbapi_connection, _record):
     cursor = dbapi_connection.cursor()
     cursor.execute("PRAGMA foreign_keys=ON")
     cursor.close()
+
+
+if _IS_SQLITE:
+    event.listen(test_engine.sync_engine, "connect", _enforce_sqlite_foreign_keys)
 
 
 @pytest_asyncio.fixture(scope="function", autouse=True)

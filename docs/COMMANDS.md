@@ -104,7 +104,8 @@ schema is not a template.
 
 | Command | Description |
 | --- | --- |
-| `make test` | `pytest -q` |
+| `make test` | `pytest -q`, on in-memory SQLite |
+| `TEST_DATABASE_URL=postgresql+asyncpg://… uv run pytest -q` | The same suite on Postgres, as CI runs it. **Use a throwaway database** — every test drops all tables |
 | `uv run pytest -q --cov --cov-report=term-missing` | With coverage |
 | `uv run pytest tests/modules/auth -v` | One module |
 | `uv run pytest -k "refresh"` | By name |

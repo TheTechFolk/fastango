@@ -239,8 +239,12 @@ tests/
 - In-memory SQLite with `PRAGMA foreign_keys=ON`, because SQLite leaves FK
   enforcement off and a suite that never checks them proves nothing.
 - Almost no mocking: real DB, real tokens, real middleware.
-- SQLite is not Postgres. The CI `migrations` job closes that gap by applying
-  migrations to real Postgres and running `alembic check`.
+- SQLite is not Postgres, so CI runs the suite on both. Locally, set
+  `TEST_DATABASE_URL` to do the same. It is deliberately not `DATABASE_URL`:
+  every test drops all the tables, so pointing the suite at a real server has
+  to be explicit — and never at a database you want to keep.
+- The CI `migrations` job covers what no test can: it applies the migrations to
+  real Postgres and runs `alembic check`.
 
 ---
 

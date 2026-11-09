@@ -86,7 +86,7 @@ response — success, 404, 422, 429, 503 — comes back in the same envelope:
 | **Security** | default-deny routing, hardcoded JWT algorithms, required claims, secret-key strength gate, CORS wildcard rejection, CSP/HSTS/COOP/CORP, trusted hosts, Redis-backed proxy-aware rate limiting |
 | **Database** | SQLAlchemy 2.0 async, explicit transactions, an uncommitted-write guard that fails loudly instead of losing data, Alembic wired to auto-discovered models |
 | **Observability** | `X-Request-ID` on every response and every log line, request timing, liveness + readiness probes, optional Sentry (off unless `SENTRY_DSN` is set) |
-| **Testing** | in-memory SQLite with FK enforcement, real signed tokens (no auth bypass, ever), anon/user/admin clients |
+| **Testing** | in-memory SQLite with FK enforcement locally, SQLite and Postgres in CI, real signed tokens (no auth bypass, ever), anon/user/admin clients |
 | **Tooling** | `uv`, ruff, mypy, pre-commit, a Makefile, 4-job CI including a migration-drift check |
 | **Deploy** | multi-stage non-root Docker image, healthcheck, `--proxy-headers` |
 
