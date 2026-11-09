@@ -37,6 +37,16 @@ def _build_limiter() -> Limiter:
                 key_func=client_ip,
                 enabled=settings.RATE_LIMIT_ENABLED,
                 storage_uri=uri,
+                # Constructing the limiter never connects, so the except below
+                # only catches a missing package. A Redis that is *down* shows
+                # up on the first request — and without this every login,
+                # register, refresh and logout would answer 500 until it came
+                # back. Per-worker limits are weaker; no login is worse.
+                in_memory_fallback_enabled=True,
+                # Fail over in a second rather than hang on a black-holed host.
+                # slowapi annotates this Dict[str, str], but it is passed
+                # straight to the redis client, which needs numbers here.
+                storage_options={"socket_connect_timeout": 1, "socket_timeout": 1},  # type: ignore[dict-item]
             )
         except (ConfigurationError, ImportError):
             logger.warning(
