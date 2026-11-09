@@ -35,10 +35,13 @@ from app.core.responses import error_response
 logger = logging.getLogger("fastango")
 
 
-def _field_errors(exc: RequestValidationError) -> dict[str, str] | None:
-    """Flatten pydantic errors to {field: message}, dev environments only."""
-    if not settings.is_dev:
-        return None
+def _field_errors(exc: RequestValidationError) -> dict[str, str]:
+    """Flatten pydantic errors to {field: message}, in every environment.
+
+    A frontend needs to know which field failed. Only pydantic's `msg` goes
+    out — never `input`, which would echo back whatever was sent, passwords
+    included.
+    """
     return {
         ".".join(str(part) for part in err["loc"][1:]) or "body": err["msg"] for err in exc.errors()
     }

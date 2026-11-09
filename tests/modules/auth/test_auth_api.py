@@ -80,6 +80,20 @@ async def test_short_password_rejected(anon_client):
 
 
 @pytest.mark.asyncio
+async def test_422_names_the_field_in_production(anon_client, monkeypatch):
+    """A frontend has to know which field failed — not only in dev — and the
+    submitted value must never be echoed back."""
+    from app.config import settings
+
+    monkeypatch.setattr(settings, "APP_ENV", "production")
+    resp = await anon_client.post(REGISTER, json={**CREDENTIALS, "password": "short"})
+    assert resp.status_code == 422
+    data = resp.json()["data"]
+    assert set(data) == {"password"}
+    assert "short" not in resp.text
+
+
+@pytest.mark.asyncio
 async def test_login_succeeds_with_correct_credentials(anon_client):
     await anon_client.post(REGISTER, json=CREDENTIALS)
     resp = await anon_client.post(LOGIN, json=CREDENTIALS)
