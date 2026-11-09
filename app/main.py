@@ -48,6 +48,29 @@ async def lifespan(app: FastAPI):
     logger.info("🛑  Fastango is shutting down.")
 
 
+def configure_sentry() -> None:
+    """Start Sentry if, and only if, SENTRY_DSN is set.
+
+    Before the app is built, as Sentry's FastAPI integration expects. The SDK
+    sends in a background thread and drops events if Sentry is unreachable,
+    so an outage there never fails a request here.
+    """
+    if not settings.SENTRY_DSN:
+        return
+    import sentry_sdk
+
+    sentry_sdk.init(
+        dsn=settings.SENTRY_DSN,
+        environment=settings.APP_ENV,
+        release=settings.APP_VERSION,
+        traces_sample_rate=settings.SENTRY_TRACES_SAMPLE_RATE,
+        # No IPs, headers or bodies: they carry tokens and passwords.
+        send_default_pii=False,
+    )
+
+
+configure_sentry()
+
 # The docs publish every private route, schema and field name. Anonymous in
 # production is a free map of the attack surface, so they exist in dev only.
 _docs_enabled = settings.is_dev

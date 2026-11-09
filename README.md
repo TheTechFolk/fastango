@@ -79,7 +79,7 @@ response — success, 404, 422, 429, 503 — comes back in the same envelope:
 | **Auth** | register / login / refresh / logout / me, JWT access+refresh with single-use refresh tokens, bcrypt off the event loop, timing-flat login, role guards |
 | **Security** | default-deny routing, hardcoded JWT algorithms, required claims, secret-key strength gate, CORS wildcard rejection, CSP/HSTS/COOP/CORP, trusted hosts, Redis-backed proxy-aware rate limiting |
 | **Database** | SQLAlchemy 2.0 async, explicit transactions, an uncommitted-write guard that fails loudly instead of losing data, Alembic wired to auto-discovered models |
-| **Observability** | `X-Request-ID` on every response and every log line, request timing, liveness + readiness probes |
+| **Observability** | `X-Request-ID` on every response and every log line, request timing, liveness + readiness probes, optional Sentry (off unless `SENTRY_DSN` is set) |
 | **Testing** | in-memory SQLite with FK enforcement, real signed tokens (no auth bypass, ever), anon/user/admin clients |
 | **Tooling** | `uv`, ruff, mypy, pre-commit, a Makefile, 4-job CI including a migration-drift check |
 | **Deploy** | multi-stage non-root Docker image, healthcheck, `--proxy-headers` |
@@ -129,6 +129,8 @@ If you are unsure, it is a feature.
 - Run behind a proxy with `--proxy-headers` (the image already does), or the
   rate limiter buckets the entire internet into one counter.
 - `/docs` is served in development only.
+- `SENTRY_DSN` — optional. Empty keeps Sentry off; set it to report errors.
+  `SENTRY_TRACES_SAMPLE_RATE` (default `0.1`) controls performance tracing.
 
 ## License
 

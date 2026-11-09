@@ -87,7 +87,7 @@ def _shell(_: argparse.Namespace) -> None:
         # nothing loaded. Fail loudly rather than hand over an empty shell.
         sys.exit("manage.py shell needs Python 3.13+.")
     env = {**os.environ, SHELL_FLAG: "1", "PYTHONSTARTUP": os.path.abspath(__file__)}  # type: ignore[unreachable]  # mypy targets 3.12
-    sys.exit(subprocess.call([sys.executable, "-m", "asyncio"], env=env))  # noqa: S603 — fixed argv, no user input
+    sys.exit(subprocess.call([sys.executable, "-m", "asyncio"], env=env))
 
 
 def _preload_shell() -> None:

@@ -3,7 +3,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Literal
 
-from pydantic import field_validator, model_validator
+from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # Environment names, in one place. Several files used to keep their own tuple
@@ -96,6 +96,13 @@ class Settings(BaseSettings):
     # Backs the rate limiter. Empty falls back to in-memory storage, which is
     # per-worker — fine for one process, wrong for any real deployment.
     REDIS_URL: str = ""
+
+    # ── Sentry ────────────────────────────────────────────────────────────
+    # Optional. Empty means Sentry is never initialized — no import, no
+    # network, nothing. The sample rate only applies to performance traces;
+    # errors are always sent once a DSN is set.
+    SENTRY_DSN: str = ""
+    SENTRY_TRACES_SAMPLE_RATE: float = Field(default=0.1, ge=0.0, le=1.0)
 
     # ── CORS ──────────────────────────────────────────────────────────────
     CORS_ORIGINS: list[str] = ["http://localhost:3000", "http://localhost:8000"]

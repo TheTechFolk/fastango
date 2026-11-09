@@ -39,6 +39,9 @@ dependencies = [
     # NOTE: no python-multipart. Nothing here declares Form()/File()/UploadFile,
     # and FastAPI fails loudly ("Form data requires 'python-multipart'") the
     # moment something does. Add it back with your first upload endpoint.
+    # ── Observability ─────────────────────────────────────────────────────────
+    # Only initialized when SENTRY_DSN is set; otherwise never even imported.
+    "sentry-sdk>=2.0,<3",
 ]
 
 [dependency-groups]
@@ -120,6 +123,8 @@ ignore = [
 # secrets — config.py rejects that very value outside development.
 "app/config.py" = ["S105"]
 "app/core/constants.py" = ["S105"]
+# `shell` spawns sys.executable with a fixed argv — no user input reaches it.
+"manage.py" = ["S603"]
 "app/modules/auth/schemas.py" = ["S105"]
 
 
