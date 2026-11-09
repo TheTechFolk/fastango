@@ -1,7 +1,7 @@
 # Fastango — shortcuts for the everyday commands. manage.py has the rest.
 # Recipes use the `target: ; command` form so nothing breaks on tabs vs spaces.
 
-.PHONY: help setup dev test lint fix migrate revision check up down logs module
+.PHONY: help setup dev test lint fix audit migrate revision check up down logs module
 
 help:     ; @grep -E '^[a-z]+:' Makefile | sed 's/:.*#/ —/' | sed 's/: ;.*//'
 
@@ -10,6 +10,7 @@ dev:      ; uv run uvicorn app.main:app --reload
 test:     ; uv run pytest -q
 lint:     ; uv run ruff check . && uv run ruff format --check . && uv run mypy app manage.py
 fix:      ; uv run ruff check --fix . && uv run ruff format .
+audit:    ; uv export --frozen --no-dev --no-emit-project --no-hashes --format requirements-txt | uvx pip-audit -r /dev/stdin --no-deps --disable-pip
 migrate:  ; uv run alembic upgrade head
 revision: ; uv run alembic revision --autogenerate -m "$(m)"
 check:    ; uv run alembic check

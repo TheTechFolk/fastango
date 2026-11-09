@@ -106,6 +106,20 @@ jobs:
       - name: alembic downgrade base (the down path works too)
         run: uv run alembic downgrade base
 
+  audit:
+    name: Dependency audit
+    runs-on: ubuntu-latest
+    # Runtime dependencies only — what ships in the image. The lockfile once
+    # sat 47 FastAPI releases behind with 32 published advisories in it and
+    # nothing said so; this is the job that says so.
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - name: pip-audit
+        run: make audit
+
   docker:
     name: Image builds
     runs-on: ubuntu-latest

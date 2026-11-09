@@ -111,6 +111,7 @@ schema is not a template.
 | `uv run pytest -k "refresh"` | By name |
 | `make lint` | ruff check + ruff format --check + mypy |
 | `make fix` | ruff --fix + ruff format |
+| `make audit` | `pip-audit` on the locked runtime dependencies. CI runs it on every push |
 | `uv run pre-commit run --all-files` | Every hook against the whole tree |
 
 ---
