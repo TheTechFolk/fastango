@@ -71,6 +71,19 @@ def _envelope(
     )
 
 
+def unhandled_error_response(request: Request, exc: Exception) -> JSONResponse:
+    """Log an unexpected failure and build its 500 envelope.
+
+    Called from inside the middleware stack (app/middleware.py), where the
+    request id is still set — so the traceback can be matched to the
+    X-Request-ID the client was handed — and the response still passes out
+    through the header and CORS layers.
+    """
+    logger.exception("Unhandled exception on %s %s", request.method, request.url.path)
+    message = f"{ERROR_MSG} ({exc})" if settings.is_dev else ERROR_MSG
+    return _envelope(500, message)
+
+
 def configure_exceptions(app: FastAPI) -> None:
     """Mount all centralized exception handlers onto the FastAPI application."""
 
@@ -131,7 +144,11 @@ def configure_exceptions(app: FastAPI) -> None:
 
     @app.exception_handler(Exception)
     async def global_exception_handler(request: Request, exc: Exception):
-        """Catch-all for genuinely unexpected failures. Registered last."""
-        logger.exception("Unhandled exception on %s %s", request.method, request.url.path)
-        message = f"{ERROR_MSG} ({exc})" if settings.is_dev else ERROR_MSG
-        return _envelope(500, message)
+        """Last resort only — see unhandled_error_response().
+
+        Starlette runs this handler *outside* every middleware, so a response
+        built here carries no X-Request-ID, no security headers and no CORS
+        headers. The audit middleware catches first for exactly that reason;
+        this only fires for a failure in a middleware outside it.
+        """
+        return unhandled_error_response(request, exc)

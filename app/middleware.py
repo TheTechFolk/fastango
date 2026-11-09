@@ -28,6 +28,7 @@ from app.core.context import (
 from app.core.registry import PUBLIC_ROOT
 from app.core.responses import error_response
 from app.core.security import decode_token
+from app.exceptions import unhandled_error_response
 
 audit_logger = logging.getLogger("fastango.audit")
 
@@ -105,7 +106,14 @@ def configure_middleware(app: FastAPI) -> None:
     @app.middleware("http")
     async def audit_and_timing_middleware(request: Request, call_next):
         start_time = time.perf_counter()
-        response = await call_next(request)
+        try:
+            response = await call_next(request)
+        except Exception as exc:
+            # Caught here, not left to the app-level Exception handler: that
+            # one runs outside every middleware, so its 500 would go out with
+            # no request id, no security headers, no CORS headers and no audit
+            # line — the browser would report a CORS failure, not a 500.
+            response = unhandled_error_response(request, exc)
         elapsed_ms = (time.perf_counter() - start_time) * 1000
         response.headers["X-Process-Time"] = f"{elapsed_ms:.2f}ms"
 
