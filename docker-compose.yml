@@ -7,9 +7,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    command: >
-      uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
-      --proxy-headers --forwarded-allow-ips "*"
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
     volumes:
       # Source only. Mounting the repo root would shadow /app/.venv with the
       # host's, which is built for a different platform.

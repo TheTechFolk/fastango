@@ -77,7 +77,7 @@ async def db_session() -> AsyncGenerator[AsyncSession, None]:
     """Yield a test database session.
 
     Transaction management is service-owned (services use `async with
-    db.begin():`), matching production `get_db()`, and the same
+    atomic(db):`), matching production `get_db()`, and the same
     uncommitted-write guard is enforced here.
     """
     async with TestSessionFactory() as session:
@@ -91,7 +91,7 @@ async def db_session() -> AsyncGenerator[AsyncSession, None]:
                 await session.rollback()
                 raise RuntimeError(
                     "Test left uncommitted writes on the session. Wrap setup "
-                    "mutations in `async with db_session.begin():`."
+                    "mutations in `async with atomic(db_session):`."
                 )
 
 
@@ -123,9 +123,8 @@ def _override_get_db(db_session: AsyncSession):
         finally:
             # Production hands every request a brand-new session, so nothing a
             # request reads can leave a transaction open for the next one. The
-            # tests share a single session, which does not — and SQLAlchemy
-            # refuses `db.begin()` once a read has implicitly opened one.
-            # Rolling back a read-only leftover reproduces the production
+            # tests share a single session, which does not. Rolling back a
+            # read-only leftover reproduces the production
             # lifecycle; anything with pending writes is left alone for the
             # uncommitted-write guard to catch.
             if db_session.in_transaction() and not _has_uncommitted_writes(db_session):
