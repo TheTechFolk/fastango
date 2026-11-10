@@ -1,5 +1,6 @@
 # app/database.py
-from collections.abc import AsyncGenerator
+from collections.abc import AsyncGenerator, AsyncIterator
+from contextlib import asynccontextmanager
 from contextvars import ContextVar
 
 from fastapi import Depends
@@ -26,8 +27,6 @@ def _engine_options() -> dict:
     return {
         "pool_size": settings.DB_POOL_SIZE,
         "max_overflow": settings.DB_MAX_OVERFLOW,
-        # Recycle before a proxy or NAT idle-timeout closes a pooled connection
-        # underneath us — pre-ping alone turns that into a retry on every checkout.
         "pool_recycle": settings.DB_POOL_RECYCLE_SECONDS,
         "pool_pre_ping": True,
     }
@@ -72,9 +71,35 @@ def get_db_session() -> AsyncSession:
         raise RuntimeError("No database session in the current context.") from exc
 
 
+# ── Transactions ──────────────────────────────────────────────────────────────
+@asynccontextmanager
+async def atomic(db: AsyncSession) -> AsyncIterator[AsyncSession]:
+    """Commit on success, roll back on any error — like Django's transaction.atomic.
+
+    Use this, not `db.begin()`. A read autobegins the session's transaction, so
+    "load, check, then write" followed by `db.begin()` raises "A transaction is
+    already begun". Commit/rollback works either way, and the read and the
+    write land in one transaction.
+
+    Does not nest: an inner block would commit the outer one's work early, so a
+    nested call raises instead. Call it once per service method.
+    """
+    if db.info.get("in_atomic"):
+        raise RuntimeError("atomic() does not nest — open it once, in the outermost service.")
+    db.info["in_atomic"] = True
+    try:
+        yield db
+        await db.commit()
+    except BaseException:
+        await db.rollback()
+        raise
+    finally:
+        db.info.pop("in_atomic", None)
+
+
 # ── Uncommitted-write guard ───────────────────────────────────────────────────
 # Tracks whether the session has writes that need a commit. Without this guard,
-# a service that mutates the DB without `async with db.begin():` would silently
+# a service that mutates the DB without `async with atomic(db):` would silently
 # lose its work — the session closes, the open transaction rolls back, and the
 # request still returns 200. Better to fail loud.
 
@@ -101,10 +126,10 @@ def _has_uncommitted_writes(session: AsyncSession) -> bool:
 
 
 # ── FastAPI Dependency ────────────────────────────────────────────────────────
-async def get_db() -> AsyncGenerator[AsyncSession, None]:
+async def get_db() -> AsyncGenerator[AsyncSession]:
     """Yield a SQLAlchemy AsyncSession as a FastAPI dependency.
 
-    Transaction management is owned by services (`async with db.begin():`).
+    Transaction management is owned by services (`async with atomic(db):`).
     On request end this dependency:
       - rolls back on an unhandled exception, or
       - raises RuntimeError if writes are still pending — catches the bug
@@ -121,20 +146,33 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
                 await session.rollback()
                 raise RuntimeError(
                     "Uncommitted writes detected at request end. Wrap service "
-                    "mutations in `async with db.begin():` so the transaction "
+                    "mutations in `async with atomic(db):` so the transaction "
                     "boundary is explicit."
                 )
 
 
-async def inject_db_session_context(db: AsyncSession = Depends(get_db)):
+async def inject_db_session_context(
+    db: AsyncSession = Depends(get_db, scope="function"),
+):
     """Bind the request-scoped database session.
 
-    Mounted on the API routers in core/registry.py, NOT on the FastAPI app — as
-    an app-level dependency it opened a pooled connection for every /health
-    liveness probe.
+    scope="function" is load-bearing. From FastAPI 0.118 a dependency's code
+    after `yield` runs once the response has already been sent, so the write
+    guard in get_db() would raise into the void: the client gets its 200 and
+    the write is rolled back unseen. Function scope runs it before the response
+    — tests/core/test_write_guard.py fails if this is ever dropped.
+
+    Mounted on the API routers in core/registry.py, NOT on the FastAPI app —
+    see the note in discover_modules().
     """
     token = db_session_ctx.set(db)
     try:
         yield
     finally:
         db_session_ctx.reset(token)
+
+
+# Use this, never a bare Depends(inject_db_session_context): FastAPI refuses a
+# request-scoped dependency on top of a function-scoped one, and a request-
+# scoped get_db is the silent-data-loss case described above.
+DbSessionContext = Depends(inject_db_session_context, scope="function")

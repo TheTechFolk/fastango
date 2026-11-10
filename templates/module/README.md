@@ -32,13 +32,16 @@ adds a `public_router`. The auth middleware gates on the `/public/` prefix alone
 | File | Responsibility |
 |---|---|
 | `apps.py` | ModuleConfig — name, prefix, tags, routers, optional module-wide dependencies |
-| `models.py` | SQLAlchemy ORM tables (delete if the module owns none) |
-| `repositories.py` | Async DB read/write operations — never commits |
+| `models.py` | SQLAlchemy ORM tables — add it when the module owns one |
+| `repositories.py` | Async DB queries, never commits — add it with `models.py` |
 | `schemas.py` | Pydantic request/response shapes; reuse the field types in `app/modules/common/schemas.py` |
 | `services.py` | Business logic and transactions. Return `(data, message)`; raise an `AppException` to fail |
 | `router.py` | FastAPI endpoints — no prefix/tags here (owned by `apps.py`) |
 | `constants.py` | Module messages; global fallbacks live in `app/core/constants.py` |
 | `dependencies.py` | Route guards, if the module has any (optional) |
+
+`models.py` and `repositories.py` are not scaffolded — `app/modules/note` is the
+worked example of both, with a paginated list and owner-scoped CRUD.
 
 This is a **floor, not a ceiling**. A module that grows an engine, a rules file
 or a `detectors/` package adds files inside itself — it does not get split.
@@ -50,7 +53,8 @@ or a `detectors/` package adds files inside itself — it does not get split.
   `ValidationException` → 400), and one handler maps the whole family.
 - **`@api_response()` builds the envelope.** Handlers return `(data, message)`
   and stay one line. Skip it on endpoints returning a `Response` subclass.
-- **Writes own their transaction** — `async with db.begin():`. `get_db()` does
+- **Writes own their transaction** — `async with atomic(db):` from `app.database`
+  (not `db.begin()`, which fails after any read). `get_db()` does
   not auto-commit, and uncommitted writes raise at request end.
 - **Leaf modules do not import each other.** Cross-module foreign keys use the
   string table name.

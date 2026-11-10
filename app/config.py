@@ -1,17 +1,15 @@
 # app/config.py
-from functools import lru_cache
 from pathlib import Path
 from typing import Literal
 
-from pydantic import field_validator, model_validator
+from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # Environment names, in one place. Several files used to keep their own tuple
 # and they drift apart — the auth path treating "local" as production while the
 # error path treats it as dev is how a bypass ships.
-Environment = Literal["local", "test", "testing", "staging", "production"]
-DEV_ENVS: tuple[Environment, ...] = ("local", "test", "testing")
-TEST_ENVS: tuple[Environment, ...] = ("test", "testing")
+Environment = Literal["local", "test", "staging", "production"]
+DEV_ENVS: tuple[Environment, ...] = ("local", "test")
 
 # Anchored to the package, not the process. A relative env_file resolves against
 # the working directory, so running uvicorn from anywhere but the repo root
@@ -84,7 +82,7 @@ class Settings(BaseSettings):
     # hardcoded constant in core/security.py — taking that list from config is
     # how "alg: none" gets accepted.
     JWT_ALGORITHM: Literal["HS256", "HS384", "HS512"] = "HS256"
-    JWT_ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
+    JWT_ACCESS_TOKEN_EXPIRE_MINUTES: int = 15
     JWT_REFRESH_TOKEN_EXPIRE_DAYS: int = 7
 
     # ── Rate Limiting ─────────────────────────────────────────────────────
@@ -96,6 +94,13 @@ class Settings(BaseSettings):
     # Backs the rate limiter. Empty falls back to in-memory storage, which is
     # per-worker — fine for one process, wrong for any real deployment.
     REDIS_URL: str = ""
+
+    # ── Sentry ────────────────────────────────────────────────────────────
+    # Optional. Empty means Sentry is never initialized — no import, no
+    # network, nothing. The sample rate only applies to performance traces;
+    # errors are always sent once a DSN is set.
+    SENTRY_DSN: str = ""
+    SENTRY_TRACES_SAMPLE_RATE: float = Field(default=0.1, ge=0.0, le=1.0)
 
     # ── CORS ──────────────────────────────────────────────────────────────
     CORS_ORIGINS: list[str] = ["http://localhost:3000", "http://localhost:8000"]
@@ -146,7 +151,7 @@ class Settings(BaseSettings):
         Added for test environments only. It used to sit in the production
         default, where TrustedHostMiddleware would accept it from anyone.
         """
-        if self.APP_ENV in TEST_ENVS and "testserver" not in self.ALLOWED_HOSTS:
+        if self.APP_ENV == "test" and "testserver" not in self.ALLOWED_HOSTS:
             self.ALLOWED_HOSTS = [*self.ALLOWED_HOSTS, "testserver"]
         return self
 
@@ -157,10 +162,4 @@ class Settings(BaseSettings):
         return self.APP_ENV in DEV_ENVS
 
 
-@lru_cache(maxsize=1)
-def get_settings() -> Settings:
-    """Return a cached singleton of Settings."""
-    return Settings()
-
-
-settings: Settings = get_settings()
+settings = Settings()

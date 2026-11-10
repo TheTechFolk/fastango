@@ -34,16 +34,12 @@ def get_request_id() -> str:
 
 
 def client_ip(request: Request) -> str:
-    """The caller's address, honouring the proxy chain.
+    """The caller's address — the rate-limit key and the audit log's client.
 
-    Behind an ingress `request.client.host` is the proxy for every request, so
-    the audit log records one address for the whole internet and the rate
-    limiter buckets everyone into a single counter — turning a 5/minute login
-    limit into a DoS on your own login endpoint. Uvicorn only rewrites
-    request.client when started with --proxy-headers, so read the header here
-    too and take the left-most entry, which is the original client.
+    Never read X-Forwarded-For here: its left-most entry is whatever the client
+    sent, so rotating it would mint a fresh rate-limit bucket per request.
+    Behind a proxy, uvicorn's --proxy-headers rewrites request.client from that
+    header, but only for hops listed in FORWARDED_ALLOW_IPS — which must be
+    the proxy's address, never "*".
     """
-    forwarded = request.headers.get("x-forwarded-for", "")
-    if forwarded:
-        return forwarded.split(",")[0].strip()
     return request.client.host if request.client else "unknown"

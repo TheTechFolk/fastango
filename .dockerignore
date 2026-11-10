@@ -6,7 +6,7 @@
 .pytest_cache
 __pycache__
 *.pyc
-.note
+note
 tests
 docs
 *.md

@@ -4,10 +4,16 @@ These are the tests that prove the routing convention is a security control and
 not just a naming scheme.
 """
 
+import logging
+
 import pytest
+from fastapi import FastAPI
+from httpx import ASGITransport, AsyncClient
 
 from app.core.context import REQUEST_ID_HEADER
 from app.core.registry import PRIVATE_ROOT, PUBLIC_ROOT
+from app.logging_config import RequestIdFilter
+from app.middleware import configure_middleware
 
 PRIVATE_URL = f"{PRIVATE_ROOT}/auth/me"
 PUBLIC_URL = f"{PUBLIC_ROOT}/auth/login"
@@ -78,6 +84,14 @@ async def test_upstream_request_id_propagated(anon_client):
 
 
 @pytest.mark.asyncio
+async def test_upstream_uuid_request_id_propagated(anon_client):
+    """Proxies send UUIDs. Dropping them would break the trace at this hop."""
+    upstream = "3fa85f64-5717-4562-b3fc-2c963f66afa6"
+    resp = await anon_client.get("/health", headers={REQUEST_ID_HEADER: upstream})
+    assert resp.headers[REQUEST_ID_HEADER] == upstream
+
+
+@pytest.mark.asyncio
 async def test_malformed_upstream_request_id_replaced(anon_client):
     """It lands in logs — only accept something that looks like an id."""
     resp = await anon_client.get("/health", headers={REQUEST_ID_HEADER: "../../etc/passwd"})
@@ -102,3 +116,35 @@ async def test_unknown_route_uses_the_envelope(client):
     assert body["error"] is True
     assert body["data"] is None
     assert "message" in body
+
+
+@pytest.mark.asyncio
+async def test_unhandled_500_keeps_request_id_headers_cors_and_audit_line(caplog):
+    """An unexpected failure is where the request id matters most. Left to the
+    app-level Exception handler it went out with none of this, because that
+    handler runs outside every middleware."""
+    app = FastAPI()
+    configure_middleware(app)
+
+    @app.get("/public/boom")
+    async def boom():
+        raise RuntimeError("boom")
+
+    caplog.handler.addFilter(RequestIdFilter())
+    with caplog.at_level(logging.INFO):
+        transport = ASGITransport(app=app, raise_app_exceptions=False)
+        async with AsyncClient(transport=transport, base_url="http://testserver") as ac:
+            resp = await ac.get("/public/boom", headers={"Origin": "http://localhost:3000"})
+
+    assert resp.status_code == 500
+    assert resp.json()["error"] is True
+    request_id = resp.headers[REQUEST_ID_HEADER]
+    assert resp.headers["X-Content-Type-Options"] == "nosniff"
+    assert resp.headers["Access-Control-Allow-Origin"] == "http://localhost:3000"
+
+    # The traceback is logged under the same id the client was handed...
+    error = next(r for r in caplog.records if r.levelno == logging.ERROR)
+    assert error.request_id == request_id
+    assert error.exc_info
+    # ...and the request still gets its audit line.
+    assert any("/public/boom -> 500" in r.getMessage() for r in caplog.records)

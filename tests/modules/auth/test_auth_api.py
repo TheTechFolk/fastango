@@ -10,6 +10,7 @@ from app.modules.auth.models import Auth
 REGISTER = f"{PUBLIC_ROOT}/auth/register"
 LOGIN = f"{PUBLIC_ROOT}/auth/login"
 REFRESH = f"{PUBLIC_ROOT}/auth/refresh"
+LOGOUT = f"{PUBLIC_ROOT}/auth/logout"
 ME = f"{PRIVATE_ROOT}/auth/me"
 
 CREDENTIALS = {"email": "user@example.com", "password": "SuperSecretPassword123"}
@@ -79,6 +80,28 @@ async def test_short_password_rejected(anon_client):
 
 
 @pytest.mark.asyncio
+async def test_password_over_72_bytes_rejected(anon_client):
+    """40 characters, 80 bytes. bcrypt would hash only the first 72."""
+    resp = await anon_client.post(REGISTER, json={**CREDENTIALS, "password": "п" * 40})
+    assert resp.status_code == 422
+    assert "password" in resp.json()["data"]
+
+
+@pytest.mark.asyncio
+async def test_422_names_the_field_in_production(anon_client, monkeypatch):
+    """A frontend has to know which field failed — not only in dev — and the
+    submitted value must never be echoed back."""
+    from app.config import settings
+
+    monkeypatch.setattr(settings, "APP_ENV", "production")
+    resp = await anon_client.post(REGISTER, json={**CREDENTIALS, "password": "short"})
+    assert resp.status_code == 422
+    data = resp.json()["data"]
+    assert set(data) == {"password"}
+    assert "short" not in resp.text
+
+
+@pytest.mark.asyncio
 async def test_login_succeeds_with_correct_credentials(anon_client):
     await anon_client.post(REGISTER, json=CREDENTIALS)
     resp = await anon_client.post(LOGIN, json=CREDENTIALS)
@@ -145,6 +168,51 @@ async def test_refresh_rejects_an_access_token(anon_client):
     access_token = registered.json()["data"]["access_token"]
 
     resp = await anon_client.post(REFRESH, json={"refresh_token": access_token})
+    assert resp.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_refresh_rotates_so_a_used_token_is_dead(anon_client):
+    """Reusing a redeemed refresh token is what theft looks like — refuse it."""
+    registered = await anon_client.post(REGISTER, json=CREDENTIALS)
+    old = registered.json()["data"]["refresh_token"]
+
+    rotated = await anon_client.post(REFRESH, json={"refresh_token": old})
+    assert rotated.status_code == 200
+    assert (await anon_client.post(REFRESH, json={"refresh_token": old})).status_code == 401
+
+    new = rotated.json()["data"]["refresh_token"]
+    assert (await anon_client.post(REFRESH, json={"refresh_token": new})).status_code == 200
+
+
+@pytest.mark.asyncio
+async def test_logout_revokes_the_refresh_token(anon_client):
+    registered = await anon_client.post(REGISTER, json=CREDENTIALS)
+    refresh_token = registered.json()["data"]["refresh_token"]
+
+    resp = await anon_client.post(LOGOUT, json={"refresh_token": refresh_token})
+    assert resp.status_code == 200
+    assert resp.json()["error"] is False
+
+    resp = await anon_client.post(REFRESH, json={"refresh_token": refresh_token})
+    assert resp.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_logout_twice_is_still_success(anon_client):
+    registered = await anon_client.post(REGISTER, json=CREDENTIALS)
+    body = {"refresh_token": registered.json()["data"]["refresh_token"]}
+
+    assert (await anon_client.post(LOGOUT, json=body)).status_code == 200
+    assert (await anon_client.post(LOGOUT, json=body)).status_code == 200
+
+
+@pytest.mark.asyncio
+async def test_logout_rejects_an_access_token(anon_client):
+    registered = await anon_client.post(REGISTER, json=CREDENTIALS)
+    access_token = registered.json()["data"]["access_token"]
+
+    resp = await anon_client.post(LOGOUT, json={"refresh_token": access_token})
     assert resp.status_code == 401
 
 

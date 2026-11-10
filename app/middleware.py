@@ -9,6 +9,7 @@ outermost wrapper. Request flow, outermost to innermost:
 """
 
 import logging
+import re
 import time
 
 from fastapi import FastAPI, HTTPException, Request
@@ -27,8 +28,14 @@ from app.core.context import (
 from app.core.registry import PUBLIC_ROOT
 from app.core.responses import error_response
 from app.core.security import decode_token
+from app.exceptions import unhandled_error_response
 
 audit_logger = logging.getLogger("fastango.audit")
+
+# What an upstream X-Request-ID may look like. It lands in log lines, so only
+# plain id characters — but hyphens are in, or every UUID a proxy sends would
+# be thrown away and the trace would break at this hop.
+_REQUEST_ID_RE = re.compile(r"[A-Za-z0-9-]{1,64}")
 
 # Everything under here is reachable without a token. The trailing slash is
 # deliberate — a bare "/public" prefix would also exempt "/publicity".
@@ -99,7 +106,14 @@ def configure_middleware(app: FastAPI) -> None:
     @app.middleware("http")
     async def audit_and_timing_middleware(request: Request, call_next):
         start_time = time.perf_counter()
-        response = await call_next(request)
+        try:
+            response = await call_next(request)
+        except Exception as exc:
+            # Caught here, not left to the app-level Exception handler: that
+            # one runs outside every middleware, so its 500 would go out with
+            # no request id, no security headers, no CORS headers and no audit
+            # line — the browser would report a CORS failure, not a 500.
+            response = unhandled_error_response(request, exc)
         elapsed_ms = (time.perf_counter() - start_time) * 1000
         response.headers["X-Process-Time"] = f"{elapsed_ms:.2f}ms"
 
@@ -124,7 +138,7 @@ def configure_middleware(app: FastAPI) -> None:
     async def request_id_middleware(request: Request, call_next):
         incoming = request.headers.get(REQUEST_ID_HEADER, "").strip()
         # Trust an upstream id only if it looks like one — it lands in logs.
-        request_id = incoming if incoming.isalnum() and len(incoming) <= 64 else new_request_id()
+        request_id = incoming if _REQUEST_ID_RE.fullmatch(incoming) else new_request_id()
         token = request_id_ctx.set(request_id)
         try:
             response = await call_next(request)

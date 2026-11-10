@@ -83,12 +83,16 @@ Do **not** decorate endpoints returning a `Response` subclass (`FileResponse`,
 class OrderService:
     async def create(self, data: OrderCreateSchema) -> tuple[dict, str]:
         db = get_db_session()
-        async with db.begin():                       # writes own their boundary
+        async with atomic(db):                       # writes own their boundary
             if await OrderRepository.get_by_ref(db, data.ref):
                 raise ValidationException(ORDER_EXISTS_MSG)
             order = await OrderRepository.create(db, Order(**data.model_dump()))
         return {"code": order.code}, ORDER_CREATED_MSG
 ```
+
+`atomic` (from `app.database`) commits on success and rolls back on error. Use it
+rather than `db.begin()`, which raises once any read has started the transaction —
+and "load, check, then write" always reads first.
 
 Return `(data, message)` on success. **Raise** to fail — never return an error
 tuple. `get_db()` does not auto-commit, and a request that ends with pending
@@ -102,17 +106,22 @@ query API, and wrapping it produces worse typing and worse joins.
 
 ### `models.py` — tables
 
-Inherit `CommonFieldBase` for `created_at` / `updated_at` / `is_active`. Expose
-a `code: uuid.UUID` and never the sequential primary key.
+Inherit `TimeStampedBase` for `created_at` / `updated_at`, or `CommonFieldBase`
+to add `is_active`. Expose a `code: uuid.UUID` and never the sequential primary
+key.
 
 Cross-module foreign keys use the **string table name**:
 
 ```python
-owner_id: Mapped[int] = mapped_column(ForeignKey("auth.id", ondelete="CASCADE"))
+owner_code: Mapped[uuid.UUID] = mapped_column(ForeignKey("auth.code", ondelete="CASCADE"))
 ```
 
 SQLAlchemy resolves it lazily, so `orders` never imports `auth`'s model class
-and the two stay independently deletable.
+and the two stay independently deletable. Point at `auth.code`, not `auth.id`:
+the code is the access token's subject, so the owner is known without a lookup.
+
+`app/modules/note` is all four layers working together — a paginated list and
+create / update / delete, every query scoped to the caller.
 
 ---
 
@@ -136,6 +145,13 @@ Adding a new exception type never requires touching a handler.
 Exception detail reaches the client in development only. Every error response
 carries `X-Request-ID`, which is also on every log line — that is how a user's
 bug report gets matched to a stack trace.
+
+The OpenAPI schema documents the same envelope. The two root routers declare
+401 and 422 for every route; a route that can fail another way says so:
+
+```python
+@router.get("/{code}", response_model=NoteResponse, responses=error_responses(404))
+```
 
 > **Do not use `AlreadyExistsException` for registration.** A 409 confirms the
 > email is taken, which is exactly what the generic message exists to hide.
@@ -223,8 +239,12 @@ tests/
 - In-memory SQLite with `PRAGMA foreign_keys=ON`, because SQLite leaves FK
   enforcement off and a suite that never checks them proves nothing.
 - Almost no mocking: real DB, real tokens, real middleware.
-- SQLite is not Postgres. The CI `migrations` job closes that gap by applying
-  migrations to real Postgres and running `alembic check`.
+- SQLite is not Postgres, so CI runs the suite on both. Locally, set
+  `TEST_DATABASE_URL` to do the same. It is deliberately not `DATABASE_URL`:
+  every test drops all the tables, so pointing the suite at a real server has
+  to be explicit — and never at a database you want to keep.
+- The CI `migrations` job covers what no test can: it applies the migrations to
+  real Postgres and runs `alembic check`.
 
 ---
 
@@ -239,10 +259,10 @@ it, it is a recipe, not code.
 | Caching | `redis.asyncio` client in lifespan; a decorator on repository methods. |
 | S3 / file storage | `aioboto3`, or presigned URLs so bytes never touch the API. Not `boto3` — it is sync and blocks the loop. |
 | Email | An optional module with a lifespan-managed client. |
-| Token revocation | A Redis `jti` denylist checked in `decode_token`. |
+| Instant access-token revocation | Refresh tokens are already revoked on logout and rotation. To kill a live access token too, add a Redis `jti` denylist checked in `decode_token` — one Redis call per private request. |
+| Password change / reset, email verification | Endpoints in `modules/auth`; reset and verification need the email recipe first. `is_active` exists, an `is_verified` column does not yet. |
 | JSON logs | Swap the formatter in `logging_config.py`. |
 | Metrics | `prometheus-fastapi-instrumentator`, mounted in `main.py`. |
-| Error tracking | `sentry-sdk` init in lifespan. |
 
 ---
 

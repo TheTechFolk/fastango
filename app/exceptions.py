@@ -24,40 +24,64 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from app.config import settings
 from app.core.constants import (
     ALREADY_EXISTS_MSG,
+    CONFLICT_MSG,
     ERROR_MSG,
     RATE_LIMITED_MSG,
     SERVICE_UNAVAILABLE_MSG,
     VALIDATION_ERROR_MSG,
 )
-from app.core.context import get_request_id
 from app.core.exceptions import AppException
 from app.core.responses import error_response
 
 logger = logging.getLogger("fastango")
 
 
-def _field_errors(exc: RequestValidationError) -> dict[str, str] | None:
-    """Flatten pydantic errors to {field: message}, dev environments only."""
-    if not settings.is_dev:
-        return None
+def _field_errors(exc: RequestValidationError) -> dict[str, str]:
+    """Flatten pydantic errors to {field: message}, in every environment.
+
+    A frontend needs to know which field failed. Only pydantic's `msg` goes
+    out — never `input`, which would echo back whatever was sent, passwords
+    included.
+    """
     return {
         ".".join(str(part) for part in err["loc"][1:]) or "body": err["msg"] for err in exc.errors()
     }
 
 
-def _envelope(status_code: int, message: str, **kwargs) -> JSONResponse:
+def _is_unique_violation(exc: IntegrityError) -> bool:
+    """True for a duplicate key, as opposed to a foreign-key or NOT NULL failure.
+
+    Postgres says so with SQLSTATE 23505; SQLite only in the message text.
+    """
+    orig = exc.orig
+    return getattr(orig, "sqlstate", None) == "23505" or "UNIQUE constraint failed" in str(orig)
+
+
+def _envelope(
+    status_code: int, message: str, headers: dict[str, str] | None = None, **kwargs
+) -> JSONResponse:
     """One envelope builder, so every handler emits the same shape.
 
-    The request id goes out as a header rather than in the body: it is
-    diagnostic metadata, not part of the response contract.
+    X-Request-ID is added by request_id_middleware on the way out.
     """
-    headers = kwargs.pop("headers", None) or {}
-    headers.setdefault("X-Request-ID", get_request_id())
     return JSONResponse(
         status_code=status_code,
         content=error_response(message=message, **kwargs),
         headers=headers,
     )
+
+
+def unhandled_error_response(request: Request, exc: Exception) -> JSONResponse:
+    """Log an unexpected failure and build its 500 envelope.
+
+    Called from inside the middleware stack (app/middleware.py), where the
+    request id is still set — so the traceback can be matched to the
+    X-Request-ID the client was handed — and the response still passes out
+    through the header and CORS layers.
+    """
+    logger.exception("Unhandled exception on %s %s", request.method, request.url.path)
+    message = f"{ERROR_MSG} ({exc})" if settings.is_dev else ERROR_MSG
+    return _envelope(500, message)
 
 
 def configure_exceptions(app: FastAPI) -> None:
@@ -93,34 +117,22 @@ def configure_exceptions(app: FastAPI) -> None:
         Without this every unique/FK violation outside the one place that
         catches it by hand becomes an opaque 500.
         """
-        logger.warning(
-            "Integrity error on %s %s [request_id=%s]",
-            request.method,
-            request.url.path,
-            get_request_id(),
-        )
-        return _envelope(409, ALREADY_EXISTS_MSG)
+        logger.warning("Integrity error on %s %s", request.method, request.url.path)
+        # Only a duplicate key means "already exists". A foreign-key failure is
+        # the opposite — something referenced does not exist — so it gets the
+        # neutral message rather than a wrong one.
+        return _envelope(409, ALREADY_EXISTS_MSG if _is_unique_violation(exc) else CONFLICT_MSG)
 
     @app.exception_handler(OperationalError)
     async def operational_error_handler(request: Request, exc: OperationalError):
         """The database is unreachable or timed out — 503, not 500."""
-        logger.error(
-            "Database unavailable on %s %s [request_id=%s]",
-            request.method,
-            request.url.path,
-            get_request_id(),
-        )
+        logger.error("Database unavailable on %s %s", request.method, request.url.path)
         return _envelope(503, SERVICE_UNAVAILABLE_MSG, headers={"Retry-After": "5"})
 
     @app.exception_handler(SQLAlchemyError)
     async def sqlalchemy_error_handler(request: Request, exc: SQLAlchemyError):
         """Anything else from the driver layer, still in the envelope."""
-        logger.exception(
-            "Database error on %s %s [request_id=%s]",
-            request.method,
-            request.url.path,
-            get_request_id(),
-        )
+        logger.exception("Database error on %s %s", request.method, request.url.path)
         message = f"{ERROR_MSG} ({exc})" if settings.is_dev else ERROR_MSG
         return _envelope(500, message)
 
@@ -132,12 +144,11 @@ def configure_exceptions(app: FastAPI) -> None:
 
     @app.exception_handler(Exception)
     async def global_exception_handler(request: Request, exc: Exception):
-        """Catch-all for genuinely unexpected failures. Registered last."""
-        logger.exception(
-            "Unhandled exception on %s %s [request_id=%s]",
-            request.method,
-            request.url.path,
-            get_request_id(),
-        )
-        message = f"{ERROR_MSG} ({exc})" if settings.is_dev else ERROR_MSG
-        return _envelope(500, message)
+        """Last resort only — see unhandled_error_response().
+
+        Starlette runs this handler *outside* every middleware, so a response
+        built here carries no X-Request-ID, no security headers and no CORS
+        headers. The audit middleware catches first for exactly that reason;
+        this only fires for a failure in a middleware outside it.
+        """
+        return unhandled_error_response(request, exc)

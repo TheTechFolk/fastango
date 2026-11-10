@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, Request, status
 from app.config import settings
 from app.core.decorators import api_response
 from app.core.rate_limit import limiter
+from app.core.responses import APIResponse, error_responses
 from app.core.security import get_current_user_code
 from app.modules.auth.dependencies import registration_enabled
 from app.modules.auth.schemas import (
@@ -13,7 +14,12 @@ from app.modules.auth.schemas import (
     RegisterSchema,
     TokenResponse,
 )
-from app.modules.auth.services import AccountService, AuthService, TokenRefreshService
+from app.modules.auth.services import (
+    AccountService,
+    AuthService,
+    LogoutService,
+    TokenRefreshService,
+)
 
 # No prefix/tags here — apps.py owns those, and it also decides which of these
 # mounts under /public/api/v1 and which under /private/api/v1.
@@ -26,6 +32,7 @@ private_router = APIRouter()
     response_model=TokenResponse,
     status_code=status.HTTP_201_CREATED,
     dependencies=[Depends(registration_enabled)],
+    responses=error_responses(400, 403, 429),
 )
 @limiter.limit(settings.RATE_LIMIT_REGISTER)
 @api_response()
@@ -34,7 +41,7 @@ async def register(request: Request, payload: RegisterSchema):
     return await AuthService(payload).register()
 
 
-@public_router.post("/login", response_model=TokenResponse)
+@public_router.post("/login", response_model=TokenResponse, responses=error_responses(401, 429))
 @limiter.limit(settings.RATE_LIMIT_LOGIN)
 @api_response()
 async def login(request: Request, payload: LoginSchema):
@@ -42,7 +49,7 @@ async def login(request: Request, payload: LoginSchema):
     return await AuthService(payload).login()
 
 
-@public_router.post("/refresh", response_model=TokenResponse)
+@public_router.post("/refresh", response_model=TokenResponse, responses=error_responses(401, 429))
 @limiter.limit(settings.RATE_LIMIT_LOGIN)
 @api_response()
 async def refresh(request: Request, payload: RefreshSchema):
@@ -53,6 +60,19 @@ async def refresh(request: Request, payload: RefreshSchema):
     refresh token is the credential, and it is rate-limited like a login.
     """
     return await TokenRefreshService(payload).refresh()
+
+
+@public_router.post(
+    "/logout", response_model=APIResponse[None], responses=error_responses(401, 429)
+)
+@limiter.limit(settings.RATE_LIMIT_LOGIN)
+@api_response()
+async def logout(request: Request, payload: RefreshSchema):
+    """Revoke a refresh token. Public for the same reason /refresh is: the
+    refresh token is the credential, and logging out must work even after the
+    access token has expired.
+    """
+    return await LogoutService(payload).logout()
 
 
 @private_router.get("/me", response_model=MeResponse)

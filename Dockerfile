@@ -5,7 +5,7 @@
 # the runtime image. --no-dev keeps pytest, ruff and pre-commit out of
 # production; they ship by accident whenever dev tools sit in the runtime
 # dependency list.
-FROM python:3.12-slim AS builder
+FROM python:3.13-slim AS builder
 
 ENV UV_COMPILE_BYTECODE=1 \
     UV_LINK_MODE=copy \
@@ -22,7 +22,7 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 
 
 # ── Runtime ───────────────────────────────────────────────────────────────────
-FROM python:3.12-slim AS runtime
+FROM python:3.13-slim AS runtime
 
 # PYTHONUNBUFFERED so container logs are not withheld inside a buffer;
 # PYTHONDONTWRITEBYTECODE so no .pyc files are written into the layer.
@@ -41,6 +41,7 @@ COPY --from=builder --chown=app:app /app/.venv /app/.venv
 COPY --chown=app:app alembic.ini ./
 COPY --chown=app:app alembic ./alembic
 COPY --chown=app:app app ./app
+COPY --chown=app:app manage.py ./
 
 USER app
 
@@ -51,11 +52,12 @@ EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
     CMD python -c "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=2).status == 200 else 1)"
 
-# --proxy-headers is what makes the rate-limiter key and the audit log record
-# the real client rather than the ingress. Without it every caller shares one
-# rate-limit bucket.
+# --proxy-headers makes the rate-limiter key and the audit log record the real
+# client rather than the ingress — but only from hops in FORWARDED_ALLOW_IPS.
+# Set it to your proxy's address or CIDR (e.g. 10.0.0.0/8). Never "*": then any
+# client can send its own X-Forwarded-For and dodge every rate limit.
+ENV FORWARDED_ALLOW_IPS=127.0.0.1
 CMD ["uvicorn", "app.main:app", \
      "--host", "0.0.0.0", \
      "--port", "8000", \
-     "--proxy-headers", \
-     "--forwarded-allow-ips", "*"]
+     "--proxy-headers"]

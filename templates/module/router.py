@@ -14,13 +14,5 @@ router = APIRouter()
 @router.get("", response_model=APIResponse[SampleOutSchema])
 @api_response()
 async def get_sample():
-    """Example endpoint. Replace with your module's real routes.
-
-    Handlers stay one line: return `(data, message)` and @api_response wraps it
-    in the {error, message, data} envelope. Raise an AppException to fail — it
-    carries its own status code, so no handler writes one.
-
-    Do NOT decorate endpoints that return a Response subclass (FileResponse,
-    StreamingResponse); their body is already final.
-    """
+    """Example endpoint: return (data, message); raise an AppException to fail."""
     return await SampleService.get_sample_data()

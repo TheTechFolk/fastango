@@ -9,7 +9,8 @@ every project needs login, so this ships complete.
 |---|---|---|
 | POST | `/public/api/v1/auth/register` | none (rate limited, closable via `REGISTRATION_ENABLED`) |
 | POST | `/public/api/v1/auth/login` | none (rate limited) |
-| POST | `/public/api/v1/auth/refresh` | refresh token in body (rate limited) |
+| POST | `/public/api/v1/auth/refresh` | refresh token in body (rate limited, rotates) |
+| POST | `/public/api/v1/auth/logout` | refresh token in body (rate limited) |
 | GET | `/private/api/v1/auth/me` | access token |
 
 ## The core/module split
@@ -34,3 +35,10 @@ on. Delete this module and the app must still boot.
   serves nobody.
 - **The refresh token carries no `role` claim.** The role is re-read from the
   record, so a demotion takes effect at the next refresh.
+- **Refresh tokens are single-use.** `/refresh` revokes the token it redeems
+  (by `jti`, in `revoked_token`), and `/logout` revokes the one it is given. A
+  reused refresh token gets a 401 — that is what a stolen one looks like.
+- **Access tokens are never looked up.** Revocation touches only `/refresh` and
+  `/logout`, so private requests stay I/O-free. The cost: an access token
+  outlives logout by up to `JWT_ACCESS_TOKEN_EXPIRE_MINUTES` (15 by default).
+  Keep it short; instant revocation needs a per-request denylist (Redis).
