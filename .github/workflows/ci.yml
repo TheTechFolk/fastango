@@ -17,7 +17,7 @@ jobs:
     name: Lint & types
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: astral-sh/setup-uv@v5
         with:
           enable-cache: true
@@ -52,7 +52,7 @@ jobs:
       APP_ENV: test
       SECRET_KEY: ci-secret-key-not-used-outside-continuous-integration
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: astral-sh/setup-uv@v5
         with:
           enable-cache: true
@@ -94,7 +94,7 @@ jobs:
       SECRET_KEY: ci-secret-key-not-used-outside-continuous-integration
       DATABASE_URL: "postgresql+asyncpg://postgres:postgres@localhost:5432/fastango_db"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: astral-sh/setup-uv@v5
         with:
           enable-cache: true
@@ -113,7 +113,7 @@ jobs:
     # sat 47 FastAPI releases behind with 32 published advisories in it and
     # nothing said so; this is the job that says so.
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: astral-sh/setup-uv@v5
         with:
           enable-cache: true
@@ -124,7 +124,7 @@ jobs:
     name: Image builds
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: docker/setup-buildx-action@v3
       - uses: docker/build-push-action@v6
         with:
