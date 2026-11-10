@@ -18,7 +18,7 @@ requires-python = ">=3.13"
 dependencies = [
     # ── FastAPI core ──────────────────────────────────────────────────────────
     "fastapi>=0.121.0",
-    "uvicorn[standard]>=0.32.0",
+    "uvicorn[standard]>=0.54.0",
     # ── Database ──────────────────────────────────────────────────────────────
     "sqlalchemy>=2.0.36",
     "asyncpg>=0.30.0",
