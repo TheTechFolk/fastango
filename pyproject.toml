@@ -17,8 +17,8 @@ requires-python = ">=3.13"
 # back with 32 published advisories in the lockfile.
 dependencies = [
     # ── FastAPI core ──────────────────────────────────────────────────────────
-    "fastapi>=0.121.0",
-    "uvicorn[standard]>=0.32.0",
+    "fastapi>=0.162.7",
+    "uvicorn[standard]>=0.54.0",
     # ── Database ──────────────────────────────────────────────────────────────
     "sqlalchemy>=2.0.36",
     "asyncpg>=0.30.0",
@@ -28,7 +28,7 @@ dependencies = [
     "greenlet>=3.0",
     # ── Settings ──────────────────────────────────────────────────────────────
     "pydantic>=2.10.3",
-    "pydantic-settings>=2.6.1",
+    "pydantic-settings>=2.16.3",
     # ── Security ──────────────────────────────────────────────────────────────
     # PyJWT, not python-jose: `import jwt` is what the code does, and
     # python-jose has unpatched CVEs.
@@ -45,7 +45,7 @@ dependencies = [
     # moment something does. Add it back with your first upload endpoint.
     # ── Observability ─────────────────────────────────────────────────────────
     # Only initialized when SENTRY_DSN is set; otherwise never even imported.
-    "sentry-sdk>=2.0",
+    "sentry-sdk>=2.75.0",
 ]
 
 [dependency-groups]
@@ -55,11 +55,11 @@ dev = [
     # in the production image for the sake of two comments.
     "httpx>=0.28.0",
     "pytest>=8.3.4",
-    "pytest-asyncio>=0.24.0",
+    "pytest-asyncio>=1.5.0",
     "pytest-cov>=6.0.0",
     # The suite runs on in-memory SQLite; conftest imports this driver.
     "aiosqlite>=0.20.0",
-    "ruff>=0.8.0",
+    "ruff>=0.17.5",
     "mypy>=1.13.0",
     "pre-commit>=3.7.1",
 ]
